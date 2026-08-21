@@ -443,12 +443,17 @@ function getRecordCount() {
   return 500;
 }
 
-const totalCount = getRecordCount();
-const isCsvMode = process.argv.includes('--csv');
-const isMongoMode = process.argv.includes('--mongo') || (!isCsvMode && !process.argv.includes('--help'));
+const isDirectExecution =
+  process.argv[1] &&
+  (process.argv[1].endsWith('generateSeed.js') || process.argv[1].endsWith('generateSeed'));
 
-if (process.argv.includes('--help') || process.argv.includes('-h')) {
-  console.log(`
+if (isDirectExecution) {
+  const totalCount = getRecordCount();
+  const isCsvMode = process.argv.includes('--csv');
+  const isMongoMode = process.argv.includes('--mongo') || (!isCsvMode && !process.argv.includes('--help'));
+
+  if (process.argv.includes('--help') || process.argv.includes('-h')) {
+    console.log(`
 ReconcileAI Synthetic Seed Generator CLI
 Usage:
   node generateSeed.js [options]
@@ -463,20 +468,22 @@ Examples:
   node generateSeed.js --count=500 --mongo
   node generateSeed.js --count=1000 --csv
   npm run seed
-  `);
-  process.exit(0);
+    `);
+    process.exit(0);
+  }
+
+  // Execute CLI
+  const dataset = generateSyntheticDataset(totalCount);
+
+  if (isCsvMode) {
+    exportToCSV(dataset);
+  }
+
+  if (isMongoMode) {
+    seedToMongoDB(dataset).catch((err) => {
+      console.error('[CLI Seed Error]:', err);
+      process.exit(1);
+    });
+  }
 }
 
-// Execute CLI
-const dataset = generateSyntheticDataset(totalCount);
-
-if (isCsvMode) {
-  exportToCSV(dataset);
-}
-
-if (isMongoMode) {
-  seedToMongoDB(dataset).catch((err) => {
-    console.error('[CLI Seed Error]:', err);
-    process.exit(1);
-  });
-}

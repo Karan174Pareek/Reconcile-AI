@@ -16,6 +16,8 @@ app.use(
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+import runsRouter from './routes/runs.js';
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -24,6 +26,9 @@ app.get('/api/health', (req, res) => {
     service: 'reconcile-ai-server',
   });
 });
+
+// API Routes
+app.use('/api/runs', runsRouter);
 
 // Standard 404 handler
 app.use((req, res, next) => {
