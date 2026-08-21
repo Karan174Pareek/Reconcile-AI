@@ -17,6 +17,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 import runsRouter from './routes/runs.js';
+import exceptionsRouter from './routes/exceptions.js';
+import draftActionsRouter from './routes/draftActions.js';
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -29,6 +31,8 @@ app.get('/api/health', (req, res) => {
 
 // API Routes
 app.use('/api/runs', runsRouter);
+app.use('/api/exceptions', exceptionsRouter);
+app.use('/api/draft-actions', draftActionsRouter);
 
 // Standard 404 handler
 app.use((req, res, next) => {

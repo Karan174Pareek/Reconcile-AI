@@ -33,8 +33,88 @@ export async function executeRunHandler(req, res, next) {
   }
 }
 
+import {
+  emitRunProgress,
+  emitPassComplete,
+  emitRunComplete,
+  emitRunError,
+} from '../sockets/runSocket.js';
+
 /**
- * Controller: Executes Pass 3 Claude reasoning and draft-action generation for a given run_id
+ * Controller: Executes full 3-pass reconciliation pipeline (Pass 1 -> Pass 2 -> Pass 3)
+ * with real-time Socket.io progress streaming
+ * POST /api/runs/:run_id/reconcile-all
+ */
+export async function reconcileAllHandler(req, res, next) {
+  const { run_id } = req.params;
+  try {
+    if (!run_id) {
+      return res.status(400).json({
+        error: {
+          code: 'MISSING_RUN_ID',
+          message: 'Parameter "run_id" is required.',
+          details: null,
+        },
+      });
+    }
+
+    // 1. Stage 1: Deterministic Matching (Pass 1 & Pass 2)
+    emitRunProgress(run_id, {
+      stage: 'pass1_pass2',
+      pass: 1,
+      percentage: 20,
+      message: 'Running Pass 1 Exact Matching & Pass 2 Fuzzy Heuristics...',
+    });
+
+    const pass1And2Result = await executeRun(run_id);
+
+    emitPassComplete(run_id, {
+      pass: 2,
+      percentage: 60,
+      stats: pass1And2Result.stats,
+      message: `Pass 1 & 2 complete: ${pass1And2Result.stats.pass1_matched} exact, ${pass1And2Result.stats.pass2_matched} fuzzy matches.`,
+    });
+
+    // 2. Stage 2: Claude AI Exception Reasoning (Pass 3)
+    emitRunProgress(run_id, {
+      stage: 'pass3_ai',
+      pass: 3,
+      percentage: 75,
+      message: 'Initiating Pass 3 Claude AI Exception Reasoning & Draft Actions...',
+    });
+
+    const { executePass3 } = await import('../services/claudeOrchestrator.js');
+    const pass3Result = await executePass3(run_id);
+
+    emitPassComplete(run_id, {
+      pass: 3,
+      percentage: 100,
+      stats: pass3Result,
+      message: `Pass 3 complete: ${pass3Result.pass3_matched} AI matches, ${pass3Result.draft_actions_count} draft actions.`,
+    });
+
+    emitRunComplete(run_id, {
+      status: 'complete',
+      stats: pass3Result,
+      message: `Reconciliation finished with ${pass3Result.match_rate}% match rate!`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Full 3-pass reconciliation pipeline executed for run ${run_id}`,
+      data: pass3Result,
+    });
+  } catch (error) {
+    emitRunError(run_id, {
+      message: error.message,
+      code: error.code || 'RECONCILIATION_ERROR',
+    });
+    next(error);
+  }
+}
+
+/**
+ * Controller: Executes Pass 3 Claude reasoning for a given run_id
  * POST /api/runs/:run_id/pass3
  */
 export async function executePass3Handler(req, res, next) {
