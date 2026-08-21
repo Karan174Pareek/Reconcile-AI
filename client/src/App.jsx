@@ -6,6 +6,7 @@ import MetricCards from './components/MetricCards.jsx';
 import LiveProgressStepper from './components/LiveProgressStepper.jsx';
 import ExceptionQueue from './components/ExceptionQueue.jsx';
 import DraftActionsQueue from './components/DraftActionsQueue.jsx';
+import AgentChat from './components/AgentChat.jsx';
 import { useRunSocket } from './hooks/useRunSocket.js';
 import {
   Layers,
@@ -27,6 +28,7 @@ export default function App() {
   const [activeRunId, setActiveRunId] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isExecutingPipeline, setIsExecutingPipeline] = useState(false);
   const [isLoadingRuns, setIsLoadingRuns] = useState(true);
 
@@ -90,6 +92,7 @@ export default function App() {
         activeRunId={activeRunId}
         onSelectRun={setActiveRunId}
         onOpenUpload={() => setIsUploadOpen(true)}
+        onOpenChat={() => setIsChatOpen(true)}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         isConnected={isConnected}
@@ -99,6 +102,13 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Agent Chat Slide-over Drawer */}
+        <AgentChat
+          runId={activeRunId}
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+        />
+
         {/* Upload Modal */}
         <UploadView
           isOpen={isUploadOpen}

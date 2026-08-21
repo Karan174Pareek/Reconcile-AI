@@ -10,7 +10,8 @@ import {
   Loader2,
   Check,
   X,
-  Sparkles,
+  Edit3,
+  Save,
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_SERVER_URL
@@ -21,6 +22,10 @@ export default function DraftActionsQueue({ runId }) {
   const [draftActions, setDraftActions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [actioningId, setActioningId] = useState(null);
+
+  // Inline editing state
+  const [editingId, setEditingId] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
 
   const fetchDraftActions = async () => {
     if (!runId) return;
@@ -39,19 +44,51 @@ export default function DraftActionsQueue({ runId }) {
     fetchDraftActions();
   }, [runId]);
 
-  const handleUpdateStatus = async (draftId, status) => {
+  const handleStartEdit = (draft) => {
+    setEditingId(draft._id);
+    setEditFormData({ ...(draft.was_edited && draft.edited_content ? draft.edited_content : draft.draft_content) });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditFormData({});
+  };
+
+  const handleApproveAction = async (draftId) => {
     try {
       setActioningId(draftId);
-      await axios.post(`${API_BASE}/draft-actions/${draftId}/status`, {
-        status,
-      });
+      const isCurrentlyEditing = editingId === draftId;
+      const payload = {};
+      if (isCurrentlyEditing) {
+        payload.edited_content = editFormData;
+      }
+
+      const res = await axios.post(`${API_BASE}/draft-actions/${draftId}/approve`, payload);
 
       setDraftActions((prev) =>
-        prev.map((d) => (d._id === draftId ? { ...d, status } : d))
+        prev.map((d) => (d._id === draftId ? res.data.data : d))
       );
+      setEditingId(null);
     } catch (err) {
-      console.error('[Draft Action Error]:', err);
-      alert('Failed to update draft action status');
+      console.error('[Approve Action Error]:', err);
+      alert(err.response?.data?.error?.message || 'Failed to approve draft action');
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleRejectAction = async (draftId) => {
+    try {
+      setActioningId(draftId);
+      const res = await axios.post(`${API_BASE}/draft-actions/${draftId}/reject`);
+
+      setDraftActions((prev) =>
+        prev.map((d) => (d._id === draftId ? res.data.data : d))
+      );
+      setEditingId(null);
+    } catch (err) {
+      console.error('[Reject Action Error]:', err);
+      alert(err.response?.data?.error?.message || 'Failed to reject draft action');
     } finally {
       setActioningId(null);
     }
@@ -69,7 +106,7 @@ export default function DraftActionsQueue({ runId }) {
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            Auto-generated vendor communications and adjusting journal entries ready for human review
+            Human-in-the-Loop review for auto-drafted vendor communications and adjusting journal entries
           </p>
         </div>
       </div>
@@ -82,22 +119,27 @@ export default function DraftActionsQueue({ runId }) {
       ) : draftActions.length === 0 ? (
         <div className="p-12 text-center space-y-2">
           <Send className="h-8 w-8 text-slate-500 mx-auto" />
-          <h4 className="text-sm font-semibold text-slate-200">No Draft Actions Pending</h4>
+          <h4 className="text-sm font-semibold text-slate-200">No Draft Actions Generated</h4>
           <p className="text-xs text-slate-400">
-            Unrecorded transactions or refunds identified in Pass 3 will appear here with auto-drafted actions.
+            Unrecorded transactions or refunds diagnosed in Pass 3 will appear here with auto-drafted actions.
           </p>
         </div>
       ) : (
         <div className="divide-y divide-slate-800">
           {draftActions.map((draft) => {
             const isEmail = draft.action_type === 'vendor_email';
-            const content = draft.draft_content || {};
+            const isEditing = editingId === draft._id;
+            const content = isEditing
+              ? editFormData
+              : draft.was_edited && draft.edited_content
+              ? draft.edited_content
+              : draft.draft_content || {};
             const isPending = draft.status === 'pending_approval';
             const isActioning = actioningId === draft._id;
 
             return (
-              <div key={draft._id} className="p-5 hover:bg-slate-850/40 transition-colors space-y-3">
-                {/* Header info */}
+              <div key={draft._id} className="p-5 hover:bg-slate-850/40 transition-colors space-y-3.5">
+                {/* Header Row */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span
@@ -113,6 +155,11 @@ export default function DraftActionsQueue({ runId }) {
                     <span className="text-xs font-mono text-slate-400">
                       Exception Ref: {draft.exception_id}
                     </span>
+                    {draft.was_edited && (
+                      <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded-md">
+                        EDITED BY AUDITOR
+                      </span>
+                    )}
                     {draft.confidence && (
                       <span className="text-[11px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
                         {(draft.confidence * 100).toFixed(0)}% AI confidence
@@ -139,43 +186,114 @@ export default function DraftActionsQueue({ runId }) {
                   </div>
                 </div>
 
-                {/* Content Details */}
-                <div className="bg-slate-850 p-4 rounded-xl border border-slate-750 space-y-2 text-xs">
+                {/* Content Box (Editable or Read-Only) */}
+                <div className="bg-slate-850 p-4 rounded-xl border border-slate-750 space-y-3 text-xs">
                   {isEmail ? (
-                    <div className="space-y-2 font-mono">
-                      <div className="text-slate-400">
-                        <span className="text-slate-500 font-semibold mr-2">TO:</span>
-                        <span className="text-slate-200">{content.recipient}</span>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-slate-500 font-semibold w-16 shrink-0">TO:</span>
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editFormData.recipient || ''}
+                            onChange={(e) => setEditFormData({ ...editFormData, recipient: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200"
+                          />
+                        ) : (
+                          <span className="text-slate-200 font-mono">{content.recipient}</span>
+                        )}
                       </div>
-                      <div className="text-slate-400">
-                        <span className="text-slate-500 font-semibold mr-2">SUBJECT:</span>
-                        <span className="text-slate-200 font-semibold">{content.subject}</span>
+
+                      <div className="flex items-center space-x-2">
+                        <span className="text-slate-500 font-semibold w-16 shrink-0">SUBJECT:</span>
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editFormData.subject || ''}
+                            onChange={(e) => setEditFormData({ ...editFormData, subject: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200"
+                          />
+                        ) : (
+                          <span className="text-slate-200 font-semibold">{content.subject}</span>
+                        )}
                       </div>
-                      <div className="pt-2 border-t border-slate-800 text-slate-300 whitespace-pre-line font-sans text-xs">
-                        {content.body}
+
+                      <div className="pt-2 border-t border-slate-800 space-y-1">
+                        <span className="text-slate-500 font-semibold block">MESSAGE BODY:</span>
+                        {isEditing ? (
+                          <textarea
+                            rows={4}
+                            value={editFormData.body || ''}
+                            onChange={(e) => setEditFormData({ ...editFormData, body: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-sans leading-relaxed"
+                          />
+                        ) : (
+                          <div className="text-slate-300 whitespace-pre-line font-sans leading-relaxed">
+                            {content.body}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
-                      <div>
-                        <span className="text-slate-500 text-[10px] block">ENTRY TYPE</span>
-                        <span className="text-slate-200 uppercase font-semibold">{content.entry_type}</span>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
+                        <div>
+                          <span className="text-slate-500 text-[10px] block">ENTRY TYPE</span>
+                          <span className="text-slate-200 uppercase font-semibold">{content.entry_type}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 text-[10px] block">AMOUNT</span>
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editFormData.amount || ''}
+                              onChange={(e) => setEditFormData({ ...editFormData, amount: Number(e.target.value) })}
+                              className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-brand-400 font-bold w-full"
+                            />
+                          ) : (
+                            <span className="text-brand-400 font-bold">INR {content.amount?.toLocaleString()}</span>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-slate-500 text-[10px] block">DEBIT ACCOUNT</span>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editFormData.proposed_debit_account || ''}
+                              onChange={(e) => setEditFormData({ ...editFormData, proposed_debit_account: e.target.value })}
+                              className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-slate-200 w-full"
+                            />
+                          ) : (
+                            <span className="text-slate-200 truncate block">{content.proposed_debit_account}</span>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-slate-500 text-[10px] block">CREDIT ACCOUNT</span>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editFormData.proposed_credit_account || ''}
+                              onChange={(e) => setEditFormData({ ...editFormData, proposed_credit_account: e.target.value })}
+                              className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-slate-200 w-full"
+                            />
+                          ) : (
+                            <span className="text-slate-200 truncate block">{content.proposed_credit_account}</span>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-slate-500 text-[10px] block">AMOUNT</span>
-                        <span className="text-brand-400 font-bold">INR {content.amount?.toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 text-[10px] block">DEBIT ACCOUNT</span>
-                        <span className="text-slate-200 truncate block">{content.proposed_debit_account}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 text-[10px] block">CREDIT ACCOUNT</span>
-                        <span className="text-slate-200 truncate block">{content.proposed_credit_account}</span>
-                      </div>
-                      <div className="col-span-2 sm:col-span-4 pt-1 border-t border-slate-800">
-                        <span className="text-slate-500 text-[10px] block">NARRATION</span>
-                        <span className="text-slate-300">{content.narration}</span>
+
+                      <div className="pt-2 border-t border-slate-800">
+                        <span className="text-slate-500 text-[10px] block font-mono">NARRATION</span>
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editFormData.narration || ''}
+                            onChange={(e) => setEditFormData({ ...editFormData, narration: e.target.value })}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 w-full mt-1"
+                          />
+                        ) : (
+                          <span className="text-slate-300 font-mono">{content.narration}</span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -184,22 +302,52 @@ export default function DraftActionsQueue({ runId }) {
                 {/* Actions */}
                 {isPending && (
                   <div className="flex items-center justify-end space-x-2.5 pt-1">
-                    <button
-                      onClick={() => handleUpdateStatus(draft._id, 'approved')}
-                      disabled={isActioning}
-                      className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      <span>Approve Action</span>
-                    </button>
-                    <button
-                      onClick={() => handleUpdateStatus(draft._id, 'rejected')}
-                      disabled={isActioning}
-                      className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 text-xs font-semibold transition-all disabled:opacity-50"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                      <span>Reject</span>
-                    </button>
+                    {isEditing ? (
+                      <>
+                        <button
+                          onClick={handleCancelEdit}
+                          className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white"
+                        >
+                          Cancel Edit
+                        </button>
+                        <button
+                          onClick={() => handleApproveAction(draft._id)}
+                          disabled={isActioning}
+                          className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+                        >
+                          <Save className="h-3.5 w-3.5" />
+                          <span>Save & Approve</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleStartEdit(draft)}
+                          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 text-xs font-medium transition-all"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                          <span>Edit Content</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleApproveAction(draft._id)}
+                          disabled={isActioning}
+                          className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                          <span>Approve Action</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleRejectAction(draft._id)}
+                          disabled={isActioning}
+                          className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 text-xs font-semibold transition-all disabled:opacity-50"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          <span>Reject</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

@@ -15,6 +15,7 @@ export default function Navbar({
   activeRunId,
   onSelectRun,
   onOpenUpload,
+  onOpenChat,
   activeTab,
   onSelectTab,
   isConnected,
@@ -119,6 +120,15 @@ export default function Navbar({
               className="p-1.5 rounded-lg bg-slate-850 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-brand-400' : ''}`} />
+            </button>
+
+            {/* Agent Chat Button */}
+            <button
+              onClick={onOpenChat}
+              className="flex items-center space-x-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-md shadow-purple-600/20 transition-all"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Agent Chat</span>
             </button>
 
             {/* New Run Button */}
