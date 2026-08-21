@@ -9,6 +9,8 @@ dotenv.config();
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 
+import { registerSocketServer } from './sockets/runSocket.js';
+
 // Socket.io initialization
 const io = new Server(server, {
   cors: {
@@ -17,6 +19,8 @@ const io = new Server(server, {
     credentials: true,
   },
 });
+
+registerSocketServer(io);
 
 // Socket.io connection and room joins per run_id
 io.on('connection', (socket) => {
