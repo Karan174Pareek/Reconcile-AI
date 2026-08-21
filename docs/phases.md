@@ -7,9 +7,10 @@
 - [x] Configuration templates, `.env.example`, and `.gitignore`
 
 ## Phase 2: Ingestion & Deterministic Pipeline (Pass 1 & Pass 2)
-- [ ] PapaParse CSV ingestion with row-level validation
-- [ ] Pass 1 Exact Matching Engine (UTR/Reference, Exact Amount, Same Date)
-- [ ] Pass 2 Fuzzy Matching Engine (Narration similarity, date tolerance +/- 2 days)
+- [x] PapaParse CSV ingestion with row-level validation (Multer + Zod)
+- [x] Pass 1 Exact Matching Engine (UTR/Reference, Exact Amount, Same Date)
+- [x] Pass 2 Fuzzy Matching Engine (3-gram, Levenshtein, Acronym, date tolerance +/- 3 days, amount +/- 1.00)
+- [x] Multi-candidate tie preservation & unknown exception routing
 - [ ] WebSocket streaming of run progress & metrics
 
 ## Phase 3: Claude Exception Engine (Pass 3) & Agent Chat
