@@ -1,0 +1,26 @@
+{
+  "name": "reconcile-ai",
+  "version": "1.0.0",
+  "description": "AI-powered bank & ledger reconciliation engine with Claude exception reasoning",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "seed": "npm run seed --prefix server",
+    "seed:csv": "node server/scripts/generateSeed.js --csv",
+    "seed:mongo": "node server/scripts/generateSeed.js --mongo",
+    "start": "npm run start --prefix server",
+    "build:client": "npm run build --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "author": "Karan",
+  "license": "ISC"
+}
