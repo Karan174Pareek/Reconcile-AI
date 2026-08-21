@@ -13,6 +13,7 @@ import {
 } from '../controllers/matchingController.js';
 import { getRunExceptions } from '../controllers/exceptionController.js';
 import { getRunDraftActions } from '../controllers/draftActionController.js';
+import { streamAgentChat } from '../controllers/chatController.js';
 
 const router = express.Router();
 
@@ -30,5 +31,8 @@ router.post('/generate-seed', generateSeedRun);
 router.post('/:run_id/execute', executeRunHandler);
 router.post('/:run_id/pass3', executePass3Handler);
 router.post('/:run_id/reconcile-all', reconcileAllHandler);
+
+// Conversational Agent Chat with streaming tool calls
+router.post('/:run_id/chat', streamAgentChat);
 
 export default router;
