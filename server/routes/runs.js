@@ -6,6 +6,7 @@ import {
 } from '../controllers/ingestionController.js';
 import {
   executeRunHandler,
+  executePass3Handler,
   getRunDetails,
   listRuns,
 } from '../controllers/matchingController.js';
@@ -22,5 +23,6 @@ router.post('/generate-seed', generateSeedRun);
 
 // Pipeline execution
 router.post('/:run_id/execute', executeRunHandler);
+router.post('/:run_id/pass3', executePass3Handler);
 
 export default router;

@@ -34,6 +34,37 @@ export async function executeRunHandler(req, res, next) {
 }
 
 /**
+ * Controller: Executes Pass 3 Claude reasoning and draft-action generation for a given run_id
+ * POST /api/runs/:run_id/pass3
+ */
+export async function executePass3Handler(req, res, next) {
+  try {
+    const { run_id } = req.params;
+
+    if (!run_id) {
+      return res.status(400).json({
+        error: {
+          code: 'MISSING_RUN_ID',
+          message: 'Parameter "run_id" is required.',
+          details: null,
+        },
+      });
+    }
+
+    const { executePass3 } = await import('../services/claudeOrchestrator.js');
+    const result = await executePass3(run_id);
+
+    return res.status(200).json({
+      success: true,
+      message: `Pass 3 Claude reasoning completed for run ${run_id}`,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Controller: Retrieves status, metrics, matches, and exceptions for a specific run
  * GET /api/runs/:run_id
  */
