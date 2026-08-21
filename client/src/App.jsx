@@ -1,164 +1,190 @@
-import React, { useState } from 'react';
-import { 
-  CheckCircle2, 
-  AlertTriangle, 
-  Sparkles, 
-  Layers, 
-  Database, 
-  ArrowRight, 
-  FileSpreadsheet, 
-  ShieldCheck, 
-  Zap, 
-  GitBranch
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import Navbar from './components/Navbar.jsx';
+import UploadView from './components/UploadView.jsx';
+import MetricCards from './components/MetricCards.jsx';
+import LiveProgressStepper from './components/LiveProgressStepper.jsx';
+import ExceptionQueue from './components/ExceptionQueue.jsx';
+import DraftActionsQueue from './components/DraftActionsQueue.jsx';
+import { useRunSocket } from './hooks/useRunSocket.js';
+import {
+  Layers,
+  PlusCircle,
+  Activity,
+  AlertTriangle,
+  Send,
+  Loader2,
+  FileCheck2,
+  Sparkles,
 } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_SERVER_URL
+  ? `${import.meta.env.VITE_SERVER_URL}/api`
+  : 'http://localhost:5000/api';
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [runs, setRuns] = useState([]);
+  const [activeRunId, setActiveRunId] = useState(null);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isExecutingPipeline, setIsExecutingPipeline] = useState(false);
+  const [isLoadingRuns, setIsLoadingRuns] = useState(true);
+
+  // Hook for Socket.io real-time streaming & polling
+  const {
+    runData,
+    isConnected,
+    liveProgress,
+    liveEvents,
+    loading: isRefreshing,
+    refreshRun,
+  } = useRunSocket(activeRunId);
+
+  // Fetch available runs
+  const fetchRunsList = useCallback(async (selectRunId = null) => {
+    try {
+      setIsLoadingRuns(true);
+      const res = await axios.get(`${API_BASE}/runs`);
+      const fetched = res.data.data || [];
+      setRuns(fetched);
+
+      if (selectRunId) {
+        setActiveRunId(selectRunId);
+      } else if (fetched.length > 0 && !activeRunId) {
+        setActiveRunId(fetched[0].run_id);
+      }
+    } catch (err) {
+      console.error('[App] Failed to fetch runs:', err);
+    } finally {
+      setIsLoadingRuns(false);
+    }
+  }, [activeRunId]);
+
+  useEffect(() => {
+    fetchRunsList();
+  }, []);
+
+  const handleRunCreated = (newRunId) => {
+    fetchRunsList(newRunId);
+  };
+
+  const handleExecuteFullPipeline = async () => {
+    if (!activeRunId) return;
+    try {
+      setIsExecutingPipeline(true);
+      await axios.post(`${API_BASE}/runs/${activeRunId}/reconcile-all`);
+      refreshRun();
+    } catch (err) {
+      console.error('[Pipeline Execution Error]:', err);
+      alert(err.response?.data?.error?.message || 'Pipeline execution failed');
+    } finally {
+      setIsExecutingPipeline(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Top Navigation Bar */}
-      <header className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Zap className="w-5 h-5 text-slate-950 stroke-[2.5]" />
-            </div>
-            <div>
-              <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-                ReconcileAI
-              </span>
-              <span className="ml-2 text-xs font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                v1.0-scaffold
-              </span>
-            </div>
-          </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+      {/* Top Navbar */}
+      <Navbar
+        runs={runs}
+        activeRunId={activeRunId}
+        onSelectRun={setActiveRunId}
+        onOpenUpload={() => setIsUploadOpen(true)}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        isConnected={isConnected}
+        isRefreshing={isRefreshing}
+        onRefresh={refreshRun}
+      />
 
-          <div className="flex items-center space-x-6">
-            <div className="flex items-center space-x-2 text-xs text-slate-400 font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>API: localhost:5000</span>
-            </div>
-            <div className="text-xs bg-slate-800/70 border border-slate-700/60 px-3 py-1.5 rounded-lg text-slate-300">
-              Role: <span className="text-emerald-400 font-medium">Analyst (Demo)</span>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Upload Modal */}
+        <UploadView
+          isOpen={isUploadOpen}
+          onClose={() => setIsUploadOpen(false)}
+          onRunCreated={handleRunCreated}
+        />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
-        {/* Hero / Pipeline Banner */}
-        <div className="mb-8 p-8 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-900/40 border border-slate-800 shadow-2xl relative overflow-hidden">
-          <div className="absolute -top-24 -right-24 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-          
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium mb-4">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Razorpay AI Buildathon 2026 — AI Finance Controller</span>
+        {/* Empty State when no runs exist */}
+        {runs.length === 0 && !isLoadingRuns ? (
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center max-w-xl mx-auto my-12 shadow-2xl space-y-5">
+            <div className="h-16 w-16 mx-auto rounded-2xl bg-brand-600/10 border border-brand-500/20 flex items-center justify-center text-brand-400">
+              <Layers className="h-8 w-8" />
             </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-3">
-              Autonomous 3-Pass Bank & Ledger Reconciliation
-            </h1>
-            <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-              Closed-loop reconciliation: deterministic exact matching, fuzzy discrepancy resolution, and Claude-powered exception reasoning with human-in-the-loop draft remediation.
-            </p>
-          </div>
-
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-slate-800/80">
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-              <div className="text-xs font-medium text-slate-400">Pass 1 Target</div>
-              <div className="text-2xl font-bold text-white mt-1">~65%</div>
-              <div className="text-[11px] text-emerald-400 mt-0.5">Deterministic Exact Match</div>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-              <div className="text-xs font-medium text-slate-400">Pass 2 Target</div>
-              <div className="text-2xl font-bold text-white mt-1">~18%</div>
-              <div className="text-[11px] text-blue-400 mt-0.5">Fuzzy & Date Window</div>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-              <div className="text-xs font-medium text-slate-400">Pass 3 Target</div>
-              <div className="text-2xl font-bold text-white mt-1">~10%</div>
-              <div className="text-[11px] text-purple-400 mt-0.5">Claude Reasoner</div>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-              <div className="text-xs font-medium text-slate-400">Genuine Exceptions</div>
-              <div className="text-2xl font-bold text-white mt-1">~7%</div>
-              <div className="text-[11px] text-amber-400 mt-0.5">Categorized Queue</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Pipeline Architecture Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex flex-col justify-between">
-            <div>
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4">
-                <Database className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Mongoose Schemas</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                BankRecord, LedgerRecord, Match, Exception, DraftAction, AuditLog (immutable), Run, and User models initialized.
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-bold text-white">Welcome to ReconcileAI</h2>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                No reconciliation runs found. Upload your bank and ledger CSV files or generate a synthetic 500-record benchmark batch to start.
               </p>
             </div>
-            <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-emerald-400 font-mono">
-              <span>8 collections ready</span>
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
+            <button
+              onClick={() => setIsUploadOpen(true)}
+              className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold shadow-lg shadow-brand-600/20 transition-all"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>Create Initial Run</span>
+            </button>
           </div>
+        ) : (
+          <>
+            {/* Top Metric Cards */}
+            <MetricCards run={runData} />
 
-          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex flex-col justify-between">
-            <div>
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-4">
-                <FileSpreadsheet className="w-5 h-5" />
+            {/* Tab Views */}
+            {activeTab === 'dashboard' && (
+              <div className="space-y-6 animate-fadeIn">
+                {/* Live Progress Stepper */}
+                <LiveProgressStepper
+                  run={runData}
+                  liveProgress={liveProgress}
+                  liveEvents={liveEvents}
+                  onExecuteFullPipeline={handleExecuteFullPipeline}
+                  isExecuting={isExecutingPipeline}
+                />
+
+                {/* Quick Embedded Preview of Exception Queue */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold font-mono uppercase tracking-wider text-slate-400">
+                      Exception Queue Overview
+                    </h4>
+                    <button
+                      onClick={() => setActiveTab('exceptions')}
+                      className="text-xs font-semibold text-brand-400 hover:text-brand-300 transition-colors"
+                    >
+                      View Full Queue →
+                    </button>
+                  </div>
+                  <ExceptionQueue
+                    runId={activeRunId}
+                    onExceptionResolved={refreshRun}
+                  />
+                </div>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Synthetic Generator</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                CLI seed generator with 500 records: exact matches, timing lag, duplicates, bank fees, refunds, and unrecorded entries.
-              </p>
-            </div>
-            <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-blue-400 font-mono">
-              <span>CLI & CSV ready</span>
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
+            )}
 
-          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex flex-col justify-between">
-            <div>
-              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-4">
-                <ShieldCheck className="w-5 h-5" />
+            {activeTab === 'exceptions' && (
+              <div className="animate-fadeIn">
+                <ExceptionQueue
+                  runId={activeRunId}
+                  onExceptionResolved={refreshRun}
+                />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Security & Audit</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Strict input validation, bcrypt password hashing, append-only audit trail, and sandboxed draft action dispatcher.
-              </p>
-            </div>
-            <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-purple-400 font-mono">
-              <span>Strict compliance</span>
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-        </div>
+            )}
 
-        {/* Quick Command Guide */}
-        <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 font-mono text-xs text-slate-300">
-          <div className="flex items-center space-x-2 text-slate-400 mb-3 uppercase tracking-wider font-semibold text-[11px]">
-            <GitBranch className="w-4 h-4 text-emerald-400" />
-            <span>Developer Seed Commands</span>
-          </div>
-          <div className="space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800/70 text-slate-300">
-            <div><span className="text-emerald-400"># Direct Mongo seed (500 records):</span> npm run seed --prefix server</div>
-            <div><span className="text-emerald-400"># Generate CSV exports:</span> node server/scripts/generateSeed.js --csv</div>
-            <div><span className="text-emerald-400"># Start Express API:</span> npm run dev --prefix server</div>
-            <div><span className="text-emerald-400"># Start React Vite Client:</span> npm run dev --prefix client</div>
-          </div>
-        </div>
+            {activeTab === 'draft_actions' && (
+              <div className="animate-fadeIn">
+                <DraftActionsQueue runId={activeRunId} />
+              </div>
+            )}
+          </>
+        )}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800/60 py-6 text-center text-xs text-slate-500">
-        ReconcileAI &bull; Razorpay AI Buildathon 2026 &bull; Track: AI Finance Controller
+      <footer className="border-t border-slate-900 bg-slate-950 py-4 text-center text-[11px] text-slate-500 font-mono">
+        ReconcileAI • 3-Pass Forensic Engine with Claude AI & Socket.io Real-Time Streaming
       </footer>
     </div>
   );
