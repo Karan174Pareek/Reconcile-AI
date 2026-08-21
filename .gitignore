@@ -36,3 +36,9 @@ Thumbs.db
 # Generated data (optional temp CSVs)
 server/data/generated/
 data/generated/
+
+# Reference & personal docs (local only)
+docs/
+*.doc
+*.docx
+
