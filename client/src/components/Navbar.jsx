@@ -24,33 +24,33 @@ export default function Navbar({
   onRefresh,
 }) {
   return (
-    <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
+    <header className="sticky top-0 z-40 bg-navy-950/80 backdrop-blur-xl border-b border-white/10 shadow-glass">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo & Brand */}
           <div className="flex items-center space-x-3">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
-              <Layers className="h-5 w-5 text-white" />
+            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-teal-600 to-teal-400 flex items-center justify-center shadow-glow-teal">
+              <Layers className="h-5 w-5 text-navy-950" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="font-bold text-lg tracking-tight text-white">Reconcile</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                <span className="font-bold text-base tracking-tight text-text-primary">Reconcile</span>
+                <span className="text-[10px] font-semibold font-mono px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-400 border border-teal-500/20">
                   AI v2.0
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 font-mono">Forensic Financial Engine</p>
+              <p className="text-[10px] text-text-secondary font-mono tracking-tight">Autonomous Finance Controller</p>
             </div>
           </div>
 
           {/* Navigation Tabs */}
-          <nav className="hidden md:flex items-center space-x-1 bg-slate-850 p-1 rounded-xl border border-slate-800">
+          <nav className="hidden md:flex items-center space-x-1 bg-white/[0.04] p-1 rounded-xl border border-white/10">
             <button
               onClick={() => onSelectTab('dashboard')}
               className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === 'dashboard'
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  ? 'bg-teal-500 text-navy-950 font-semibold shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
               }`}
             >
               <Activity className="h-3.5 w-3.5" />
@@ -61,8 +61,8 @@ export default function Navbar({
               onClick={() => onSelectTab('exceptions')}
               className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === 'exceptions'
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  ? 'bg-teal-500 text-navy-950 font-semibold shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
               }`}
             >
               <AlertTriangle className="h-3.5 w-3.5" />
@@ -73,8 +73,8 @@ export default function Navbar({
               onClick={() => onSelectTab('draft_actions')}
               className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === 'draft_actions'
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  ? 'bg-teal-500 text-navy-950 font-semibold shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
               }`}
             >
               <Send className="h-3.5 w-3.5" />
@@ -85,8 +85,8 @@ export default function Navbar({
               onClick={() => onSelectTab('audit_trail')}
               className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === 'audit_trail'
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  ? 'bg-teal-500 text-navy-950 font-semibold shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
               }`}
             >
               <FileCheck2 className="h-3.5 w-3.5" />
@@ -95,16 +95,16 @@ export default function Navbar({
           </nav>
 
           {/* Run Selector & Actions */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5">
             {/* Live Socket Status Pill */}
             <div
-              className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border ${
+              className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-medium border ${
                 isConnected
-                  ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-400'
-                  : 'bg-amber-950/60 border-amber-800/80 text-amber-400'
+                  ? 'bg-teal-950/60 border-teal-500/30 text-teal-400'
+                  : 'bg-amber-950/60 border-amber-500/30 text-amber-400'
               }`}
             >
-              <Radio className={`h-3 w-3 ${isConnected ? 'animate-pulse text-emerald-400' : 'text-amber-400'}`} />
+              <Radio className={`h-3 w-3 ${isConnected ? 'animate-pulse text-teal-400' : 'text-amber-400'}`} />
               <span>{isConnected ? 'LIVE WS' : 'POLLING'}</span>
             </div>
 
@@ -114,10 +114,10 @@ export default function Navbar({
                 <select
                   value={activeRunId || ''}
                   onChange={(e) => onSelectRun(e.target.value)}
-                  className="bg-slate-850 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                  className="bg-white/5 border border-white/10 text-text-primary text-xs rounded-lg px-2.5 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-teal-500/50 focus:border-teal-500"
                 >
                   {runs.map((r) => (
-                    <option key={r.run_id} value={r.run_id}>
+                    <option key={r.run_id} value={r.run_id} className="bg-navy-950 text-text-primary">
                       {r.run_id} ({r.total_records || 0} recs • {r.status})
                     </option>
                   ))}
@@ -130,24 +130,24 @@ export default function Navbar({
               onClick={onRefresh}
               disabled={isRefreshing}
               title="Refresh Run Metrics"
-              className="p-1.5 rounded-lg bg-slate-850 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
+              className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-text-secondary hover:text-text-primary hover:bg-white/10 transition-colors disabled:opacity-50"
             >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-brand-400' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-teal-400' : ''}`} />
             </button>
 
             {/* Agent Chat Button */}
             <button
               onClick={onOpenChat}
-              className="flex items-center space-x-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-md shadow-purple-600/20 transition-all"
+              className="flex items-center space-x-1.5 bg-white/10 hover:bg-white/15 border border-white/15 text-text-primary text-xs font-semibold px-3 py-1.5 rounded-lg transition-all active:scale-98 shadow-sm"
             >
-              <Sparkles className="h-3.5 w-3.5" />
+              <Sparkles className="h-3.5 w-3.5 text-teal-400" />
               <span>Agent Chat</span>
             </button>
 
             {/* New Run Button */}
             <button
               onClick={onOpenUpload}
-              className="flex items-center space-x-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-md shadow-brand-600/20 transition-all"
+              className="flex items-center space-x-1.5 bg-teal-500 hover:bg-teal-400 text-navy-950 text-xs font-semibold px-3.5 py-1.5 rounded-lg shadow-glow-teal transition-all active:scale-98"
             >
               <PlusCircle className="h-4 w-4" />
               <span>New Run</span>
