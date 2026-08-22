@@ -1,181 +1,124 @@
-# ReconcileAI — Autonomous AI Finance Controller
+# ReconcileAI
 
-> **3-Pass Hybrid Financial Reconciliation Engine with Claude 3.5 Sonnet Exception Reasoning, Real-Time Socket Streaming, and Human-in-the-Loop Governance.**
+An intelligent finance reconciliation system that automatically matches bank transactions against internal ledger records — and clearly flags what it can't, instead of guessing.
 
-Built for the **Razorpay AI Buildathon 2026**  
-**Track:** AI Finance Controller  
-**Author:** Karan Pareek  
-**Demo Video:** [Watch the 5-Minute Pitch & Walkthrough](./DEMO_SCRIPT.md)
+Built for the **Razorpay AI Buildathon 2026** (*Finance Controller track*).
 
 ---
 
-## 📌 Executive Summary & Problem Statement
+## The Problem
 
-In high-volume enterprise finance operations, monthly ledger reconciliation remains trapped in spreadsheets. Finance controllers spend hundreds of hours manually comparing bank statements against internal ERP ledgers to catch timing lag, unrecorded bank charges, and duplicate transfers.
+Every business that moves money faces the same weekly chore: checking whether the bank statement actually matches the books. In most companies, this is still done manually — someone opens two spreadsheets and eyeballs which rows correspond to which. For a business processing a few hundred transactions a week, that's hours of repetitive work, and it fails in predictable ways:
 
-**Why Naive LLM Implementations Fail:**
-Passing raw tabular transactions directly to an LLM creates an untenable **verification bottleneck**:
-1. **Arithmetic Hallucinations**: LLMs struggle with precise floating-point balance matching across thousands of rows.
-2. **Cost & Latency Explosion**: Processing 10,000+ rows via LLM tokens costs hundreds of dollars and takes minutes per run.
-3. **Black-Box Opacity**: Lack of audit-grade citations for regulatory compliance.
+- A payment settles in the bank a few days after it's recorded internally
+- A customer pays in two installments instead of one, looking like a mismatch
+- Bank fees appear on the statement with no corresponding ledger entry
+- The same transaction accidentally gets recorded twice
+- Sometimes something is genuinely missing and needs a human to investigate
 
-**The ReconcileAI Solution:**
-ReconcileAI introduces a **3-pass hybrid architecture** that executes deterministic math and heuristic string similarity in-memory in under **80 milliseconds** at **$0 AI cost**, reserving **Claude 3.5 Sonnet** exclusively for ambiguous exception batches. It reports an **honest 91.4% reconciliation rate** with zero fabricated numbers.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                       RECONCILEAI SYSTEM ARCHITECTURE                                       │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-
-   Bank CSV (Statement) ──┐
-                          ├─▶ [In-Memory Ingestion + Zod Validation]
-   Ledger CSV (ERP)     ──┘                  │
-                                             ▼
-                          ┌──────────────────────────────────────┐
-                          │   PASS 1: Deterministic Exact Match  │ ──▶ Matches (66.7%, $0 AI cost)
-                          └──────────────────┬───────────────────┘
-                                             ▼ (Unmatched)
-                          ┌──────────────────────────────────────┐
-                          │   PASS 2: Fuzzy & Timing Heuristics  │ ──▶ Matches (20.0%, $0 AI cost)
-                          └──────────────────┬───────────────────┘
-                                             ▼ (Unresolved Tail)
-                          ┌──────────────────────────────────────┐
-                          │   PASS 3: Claude 3.5 Sonnet Reasoner │ ──▶ AI Matches (4.8%)
-                          └──────────────────┬───────────────────┘
-                                             │
-                                             ▼ (Exceptions Queue: 8.6%)
-           ┌─────────────────────────────────┴─────────────────────────────────┐
-           ▼                                                                   ▼
-┌───────────────────────────────┐                               ┌───────────────────────────────┐
-│     Interactive UI Queue      │                               │  Forensic Agent Chat Drawer   │
-│  • Side-by-Side Transaction   │ ◀────── SSE / Sockets ──────▶ │  • Read-Only Mongo Tool-Calls │
-│  • Inline HITL Draft Actions  │                               │  • Cited Record ID Answers    │
-│  • Manual Ledger Mapping      │                               │  • Bounded Run Scoping        │
-└──────────────┬────────────────┘                               └───────────────┬───────────────┘
-               │                                                                │
-               └───────────────────────────────┬────────────────────────────────┘
-                                               ▼
-                              ┌──────────────────────────────────┐
-                              │  Append-Only Audit Trail (Mongo) │
-                              │  • Schema-Enforced Immutability  │
-                              └──────────────────────────────────┘
-```
+Manually catching all of this, every week, at scale, is the real bottleneck — not because it's hard to understand, but because it's tedious, detail-heavy, and easy to get wrong.
 
 ---
 
-## 📊 Benchmark Results (500-Record Synthetic Seed Batch)
+## The Solution
 
-*Measured via automated benchmark execution (`node server/scripts/verifySeedMetrics.js`):*
+ReconcileAI automates this process end to end. Given a bank statement and a ledger, it identifies what matches, what doesn't, and why — and it does this without pretending everything reconciles perfectly, which is often the tell-tale sign of a naive system.
 
-| Pipeline Stage | Matched / Resolved | Percentage | Execution Timing | Mechanism |
-| :--- | :---: | :---: | :---: | :--- |
-| **Total Ingested Records** | **525 paired rows** | **100.0%** | — | Strict Zod validation & PapaParse |
-| **Pass 1: Exact Deterministic** | **350 rows** | **66.7%** | **< 15 ms** | Float equality, exact UTR, same date |
-| **Pass 2: Fuzzy & Timing Lag** | **105 rows** | **20.0%** | **< 65 ms** | 3-gram/Levenshtein similarity, `+/- 1.00`, `+/- 3d` |
-| **Pass 3: Claude AI Reasoner** | **25 rows** | **4.8%** | **< 12 s** | Batched AI reasoning with candidate narrowing |
-| **Categorized Exception Queue** | **45 rows** | **8.6%** | — | Duplicates (19), Bank Fees (25), Unrecorded (20) |
-| **Overall Reconciliation Rate** | **480 rows** | **91.4%** | — | Total resolved transactions |
-| **Pure In-Memory Match Time** | — | — | **73.60 ms** | High-throughput financial ledger processing |
+### How it works, in three stages:
 
-> **Why an 8.6% unresolved rate is a strength:** In real-world enterprise accounting, claiming a "100% automatic match rate" is a compliance red flag. Unrecorded bank fees, fraudulent debits, and vendor invoice omissions genuinely occur and must be routed to human governance.
+1. **Exact matching** — transactions with identical amounts and reference numbers are matched instantly, at zero extra cost. This resolves the majority of cases in milliseconds.
+2. **Smart approximate matching** — transactions that are close in amount, near in date, and similar in description (accounting for timing lags and minor variations) are matched with a calculated confidence score.
+3. **AI-assisted investigation** — whatever remains genuinely ambiguous after the first two stages gets reasoned through individually: is it a duplicate? A bank fee? A refund? Or a real gap that needs a person to look at it? Each is categorized with a clear explanation, not just marked red.
 
----
+### On top of this, the system includes:
 
-## 🚀 Core Features
-
-### 1. 3-Pass Reconciliation Pipeline
-- **Pass 1 (Exact)**: High-throughput deterministic matcher for exact amounts and UTR references.
-- **Pass 2 (Fuzzy)**: Resolves vendor variations (*'AWS CLOUD'* vs *'Amazon Web Services'*) and timing lag without guessing. Multi-candidate ties are preserved and routed to Pass 3.
-- **Pass 3 (Claude AI)**: Batches ambiguous rows (10 rows/call), narrows candidate proximity (`+/- 10%`, `+/- 14 days`), and diagnoses exceptions with audit citations.
-
-### 2. Real-Time Pipeline Streaming
-- Real-time **Socket.io** streaming per `run_id` (`run:progress`, `run:pass_complete`, `run:complete`, `run:error`) with a 3-second REST polling fallback.
-- Animated multi-pass stepper visualizer with a live terminal activity console.
-
-### 3. Interactive Exception Queue
-- Side-by-side transaction inspection (Bank record vs candidate ledger entries).
-- Claude AI rationale badges and confidence score meters.
-- Action controls: **Accept AI Diagnosis**, **Reject**, or **Manually Map to Ledger ID**.
-
-### 4. Human-in-the-Loop (HITL) Action Approvals
-- Automatically drafts vendor inquiry emails (for unrecorded payments) and adjusting journal entries (for bank fees & refunds).
-- Inline editing allows analysts to modify email text or debit/credit accounts before approving.
-- Idempotent execution (`already_processed: true`) with sandboxed dispatch simulation.
-
-### 5. Conversational Forensic Agent Chat
-- **Server-Sent Events (SSE)** streaming chat drawer for natural-language dataset interrogation.
-- Read-only tools strictly scoped to the active `run_id` (`query_matches`, `query_exceptions`, `query_audit_log`, `get_record_by_id`).
-- Every single tool invocation is stamped into the immutable audit log (`actor: 'claude'`, `action: 'agent_query'`).
-
-### 6. Append-Only Audit Trail
-- MongoDB Mongoose schema pre-hooks explicitly block all update and delete mutations (`updateOne`, `updateMany`, `deleteOne`, `deleteMany`, `findOneAndUpdate`, `replaceOne`, `findOneAndDelete`).
-- UI timeline view with Actor badges (`Claude AI`, `System Engine`, `Auditor`), action names, and expandable JSON payload inspector.
+- **A query interface** — instead of scrolling through spreadsheets, you can ask directly: *"Why is this transaction still unresolved?"* or *"Show me all the bank fees this week"* and get an answer pulled from the actual data.
+- **A human approval step for any action** — if the system identifies something it can help resolve (like drafting a follow-up email about a missing invoice), it prepares the draft but never sends anything or changes any record without a person explicitly approving it first.
+- **A complete audit trail** — every match and every decision is logged and traceable, so nothing is a black box.
 
 ---
 
-## 📖 Complete Design Documentation
+## Results
 
-Detailed system specifications and architectural blueprints:
+Tested against a 525-transaction synthetic dataset modeled on realistic business patterns:
 
-| Document | Purpose |
+| Metric | Result |
 | :--- | :--- |
-| 📄 [**`docs/prd.md`**](./docs/prd.md) | Product Requirements Document, user personas, and feature scope |
-| 🏗️ [**`docs/architecture.md`**](./docs/architecture.md) | System topology, component boundaries, and request flows |
-| 🗄️ [**`docs/database.md`**](./docs/database.md) | Mongoose data schemas, indexing strategy, and relationships |
-| 🔌 [**`docs/api.md`**](./docs/api.md) | REST API endpoints, SSE chat contract, and Socket.io events |
-| 🧠 [**`docs/prompts.md`**](./docs/prompts.md) | Versioned Claude system prompts, Zod schemas, and tool calling definitions |
-| 🔒 [**`docs/security.md`**](./docs/security.md) | Zero-trust posture, read-only tools, immutability, and enterprise hardening |
-| 🛡️ [**`docs/error-handling.md`**](./docs/error-handling.md) | Multi-tier fault tolerance, retries, and error boundaries |
-| 📋 [**`docs/phases.md`**](./docs/phases.md) | Step-by-step engineering milestone verification |
-| 🎬 [**`DEMO_SCRIPT.md`**](./DEMO_SCRIPT.md) | 5-minute video pitch script for the Razorpay AI Buildathon |
+| **Transactions processed** | **525** |
+| **Automatically matched (exact)** | **350 (66.7%)** |
+| **Automatically matched (approximate)** | **105 (20.0%)** |
+| **Resolved via investigation** | **25 (4.8%)** |
+| **Flagged for human review** | **45 (8.6%)** |
+| **Overall resolution rate** | **91.4%** |
+| **Processing time (automated stages)** | **~70 ms** |
+
+> **The 8.6% flagged for review is intentional, not a limitation to hide** — a reconciliation tool that claims 100% accuracy on messy real-world data is a red flag, not an achievement. Those cases are exactly the ones that should reach a human.
 
 ---
 
-## 🛠️ Quickstart & Local Setup
+## Key Features
 
-### Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **MongoDB**: Local MongoDB instance (`mongodb://localhost:27017`) or MongoDB Atlas URI
-- **Anthropic API Key**: For Pass 3 reasoning and Agent Chat (supports offline fallback mode for local testing)
+- **Live processing dashboard** — watch the reconciliation run in real time, stage by stage
+- **Exception queue** — review flagged transactions side by side with the system's reasoning
+- **Conversational query interface** — ask questions about the reconciliation run in plain language
+- **Human-in-the-loop approvals** — every proposed action requires explicit sign-off before it takes effect
+- **Full audit log** — an unchangeable record of every match and every decision, for accountability
 
-### Installation & Execution
+---
+
+## Tech Stack
+
+- **Frontend:** React, Vite, Tailwind CSS
+- **Backend:** Node.js, Express, Socket.io (*real-time updates*)
+- **Database:** MongoDB
+- **Reasoning layer:** Claude API, used specifically for the cases that simple rule-based matching can't confidently resolve — not as a blanket solution for the whole pipeline
+
+---
+
+## Engineering Approach
+
+A few decisions worth calling out, because they reflect how this was actually built:
+
+1. **The system does the cheap, fast work itself, and only escalates the genuinely hard cases.** Routing everything through an AI model would be slow, expensive, and unreliable for a task that's mostly simple arithmetic. Roughly 87% of this dataset resolves without any AI call at all.
+2. **Every action that affects real data or communicates externally requires human approval.** The system can propose, draft, and investigate — it cannot act unilaterally.
+3. **Failures are surfaced, not hidden.** If a matching step or an API call fails, the affected record is flagged for review rather than silently dropped or force-matched.
+4. **The audit log cannot be edited or deleted, even by the system itself** — it's structurally append-only, which is what makes the *"everything is traceable"* claim actually true rather than just asserted.
+
+---
+
+## Getting Started
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Karan174Pareek/Reconcile-AI.git
 cd Reconcile-AI
 
-# 2. Configure Environment Variables
+# 2. Configure environment variables
 cp server/.env.example server/.env
-# Edit server/.env and fill in MONGO_URI, CLAUDE_API_KEY, JWT_SECRET
+# Add your own Claude API key and MongoDB URI
 
-# 3. Install Dependencies
+# 3. Install dependencies
 npm install --prefix server
 npm install --prefix client
 
-# 4. Run Automated Test Suite (30/30 Unit & Integration Tests)
-npm test --prefix server
+# 4. Generate a sample benchmark dataset
+npm run seed --prefix server
 
-# 5. Start Development Servers
-npm run dev --prefix server   # Backend API & Socket server on http://localhost:5000
-npm run dev --prefix client   # Frontend Vite application on http://localhost:5173
+# 5. Start development servers
+npm run dev --prefix server
+npm run dev --prefix client
 ```
 
 ---
 
-## 🔒 Security & Reliability
+## Documentation
 
-- **No Hardcoded Secrets**: All keys and credentials are read via `process.env`. `.env` files are untracked in git.
-- **Append-Only Immutability**: All audit records are write-once and protected against modification or deletion.
-- **Read-Only Scoped Tool Router**: Agent tool calls only execute parameterized read-only queries bounded to the active `run_id`.
-- **HITL Guardrails**: Side-effecting operations (emails, journal entries) require explicit human approval.
-- **Graceful Error Boundaries**: React Error Boundary catches UI and network drops with single-click reload.
+Detailed design docs are in [**`/docs`**](./docs) — [product requirements](./docs/prd.md), [system architecture](./docs/architecture.md), [database schema](./docs/database.md), [API contracts](./docs/api.md), [security considerations](./docs/security.md), and [error-handling strategy](./docs/error-handling.md).
 
 ---
 
-## 👨‍💻 Author & Submission
+## About
 
-**Karan Pareek**  
-- **GitHub**: [@Karan174Pareek](https://github.com/Karan174Pareek)  
-- **Repository**: [https://github.com/Karan174Pareek/Reconcile-AI](https://github.com/Karan174Pareek/Reconcile-AI.git)  
-- **Buildathon**: Razorpay AI Buildathon 2026 — Track: AI Finance Controller
+Built by **Karan** — 4th-year BCA student at MAKAUT, co-founder of Ignitia Digital. This project reflects how I approach engineering problems: understand the real-world workflow first, design for the failure cases before the happy path, and build systems that are honest about their limitations rather than ones that look impressive on the surface.
+
+[**GitHub**](https://github.com/Karan174Pareek) · [**LinkedIn**](https://www.linkedin.com/in/karan174pareek)
