@@ -8,6 +8,7 @@ import {
   PlusCircle,
   Radio,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 
 export default function Navbar({

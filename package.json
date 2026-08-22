@@ -19,7 +19,8 @@
     "build:client": "npm run build --prefix client"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "playwright": "^1.62.1"
   },
   "author": "Karan",
   "license": "ISC"
