@@ -37,8 +37,3 @@ Thumbs.db
 server/data/generated/
 data/generated/
 
-# Reference & personal docs (local only)
-docs/
-*.doc
-*.docx
-
