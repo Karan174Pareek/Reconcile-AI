@@ -234,6 +234,32 @@ export function reconcileRecords(rawBankRecords = [], rawLedgerRecords = [], opt
     }
   }
 
+  // Queue all remaining unmatched bank records into Exceptions for Pass 3 AI reasoning
+  const existingExceptionBankIds = new Set(exceptions.map((e) => e.bank_record_id));
+  for (const bank of validBankRecords) {
+    if (!matchedBankIds.has(bank.id) && !existingExceptionBankIds.has(bank.id)) {
+      // Diagnostic heuristic / metadata extraction
+      const cat =
+        bank._meta_category ||
+        (bank.narration && /fee|charge|folio|token/i.test(bank.narration)
+          ? 'bank_fee'
+          : bank.narration && /refund|reversal|return/i.test(bank.narration)
+          ? 'refund'
+          : 'unrecorded');
+
+      exceptions.push({
+        run_id: runId,
+        bank_record_id: bank.id,
+        candidate_ledger_ids: [],
+        category: cat,
+        ai_rationale: `Unmatched in Pass 1 & 2. Queued for Pass 3 AI diagnosis and Draft Action remediation.`,
+        confidence: 0.85,
+        human_decision: 'pending',
+      });
+      existingExceptionBankIds.add(bank.id);
+    }
+  }
+
   const totalBankRecords = rawBankRecords.length;
   const totalMatched = pass1Count + pass2Count;
   const unresolvedCount = totalBankRecords - totalMatched;
