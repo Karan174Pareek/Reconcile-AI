@@ -1,49 +1,74 @@
 # Product Requirements Document (PRD) — ReconcileAI
 
 ## 1. Executive Summary
-**ReconcileAI** is an intelligent AI Finance Controller designed for enterprise and high-growth B2B fintechs. It closes the monthly reconciliation loop between bank statements and internal accounting ledgers through a **3-pass hybrid engine**, an interactive **Exception Queue**, a **Conversational Forensic Agent**, and **Human-in-the-Loop (HITL)** draft-action remediation.
+**ReconcileAI** is an intelligent AI Finance Controller designed for enterprise merchants, marketplaces, and high-growth B2B fintechs operating on Razorpay. It solves the industry-wide **N-to-1 Settlement Unpacking Problem** — converting lumped bank NEFT/RTGS settlement credits into individual order matches, isolating 2% MDR fees, claiming 18% GST Input Tax Credits (ITC), enforcing mathematical batch integrity gates, and orchestrating Claude 3.5 Sonnet forensic audits with Human-in-the-Loop (HITL) remediation.
 
 ---
 
-## 2. Core Problem & Market Opportunity
-- **The Verification Bottleneck**: Transaction volumes grow exponentially, but monthly reconciliation is still manual spreadsheet work.
-- **LLM Inefficiency**: Naive AI tools pass raw tabular ledgers into LLMs, causing high token costs, latency delays, and arithmetic hallucinations.
-- **The ReconcileAI Solution**: Deterministic math handles high-volume exact matching (Pass 1) and fuzzy heuristics (Pass 2) in milliseconds, reserving Claude 3.5 Sonnet exclusively for ambiguous exceptions (Pass 3).
+## 2. The Core Problem: Why 1:1 Matching Fails in Modern Fintech
+When Razorpay settles funds to a merchant's nodal bank account, it does **not** send 1 bank credit per order. It batches hundreds of payments into a single lumped credit on a T+2 settlement cycle, net of:
+- **Merchant Discount Rate (MDR)**: Typically ~2.0% per transaction.
+- **18% GST on MDR**: Tax charged on top of the gateway fee.
+- **Refund Deductions**: Net deductions for returns processed in that settlement cycle.
+
+The bank statement shows exactly **ONE row** (`NEFT CR: ... RAZORPAY SETTLEMENT setl_...`).
+Standard 2-way bank-to-ledger matching algorithms fail completely because no single ledger order matches the lumped bank credit amount. ReconcileAI solves this with a **3-Level Settlement Unpacking Engine**.
 
 ---
 
-## 3. Key User Personas
-1. **Financial Controller**: Needs accurate, provable reconciliation rates with zero fabricated data.
-2. **Finance Operations Analyst**: Reviews exception queues, inspects side-by-side transaction anomalies, and executes draft remediation workflows.
-3. **Internal / External Auditor**: Requires an immutable, append-only audit trail with exact rationale citations for every match and decision.
+## 3. The 3-Level Settlement Unpacking Architecture
+
+```
+Level 0: Bank Credit ↔ Settlement Batch Match
+         (1 lumped bank NEFT credit matched to Razorpay setl_... batch header via UTR + Net Amount)
+                              │
+                              ▼
+Level 1: Settlement Batch Explosion & Integrity Check
+         (Cryptographic Gate: Verifies Σ line item net amounts == Bank Credit within ₹0.05)
+         [If Balanced] ──► Proceed to Level 2
+         [If Imbalanced] ──► Flag 'batch_imbalance' Exception & Halt Unpacking
+                              │
+                              ▼
+Level 2: Granular Line-Item ↔ Internal Order Match
+         (Unpacks 500+ order line items, isolates 2% MDR & 18% GST ITC, diagnoses variances)
+```
 
 ---
 
-## 4. Product Feature Scope
+## 4. Variance Categorization & Tax Intelligence
+Every variance identified during unpacking is strictly classified into a deterministic enum:
+1. `mdr_fee`: Payment gateway processing fee (~2%).
+2. `gst_on_mdr`: 18% Goods & Services Tax on gateway MDR (eligible for Input Tax Credit under GST law).
+3. `refund_deduction`: Customer return debited directly from the batch credit.
+4. `rounding`: Fractional paisa rounding difference (`< ₹0.50`).
+5. `partial_settlement`: Multi-part order installment settlement.
+6. `unrecorded`: Settled Razorpay order missing from internal ERP/ledger.
+7. `batch_imbalance`: Line item sum mismatch against nodal bank credit.
+8. `unknown`: Unparseable or corrupt payload.
 
-### 4.1. Data Ingestion & Validation
-- **Formats**: CSV file uploads for Bank Statements and Internal Ledgers.
-- **Schema Enforcement**: Strict Zod validation on dates, amounts, and reference IDs before database persistence. Line-numbered error reporting on malformed data.
-- **Synthetic Seed Generator**: Instant one-click benchmark dataset (500+ records) with realistic noise profiles (exact matches, timing lag, duplicates, bank fees, refunds, and unrecorded payments).
+---
 
-### 4.2. 3-Pass Reconciliation Engine
-- **Pass 1 (Exact Deterministic)**: Exact UTR reference equality, exact amount float match, same-day settlement.
-- **Pass 2 (Fuzzy Heuristics)**: Amount tolerance (`+/- 1.00`), date window (`+/- 3 days`), and 3-gram/Levenshtein similarity on corporate payee narrations. Multi-candidate ties are preserved and routed to Pass 3.
-- **Pass 3 (Claude AI Reasoner)**: Bounded batching (10 rows/call), candidate narrowing (`+/- 10%` amount, `+/- 14 days`), diagnosis into `duplicate`, `bank_fee`, `timing_lag`, `unrecorded`, `refund`, or `unknown` with cited rationales.
+## 5. Key Product Features
 
-### 4.3. Real-Time Dashboard & Exception Queue
-- **Live Visualizer**: Multi-pass progress stepper powered by Socket.io with 3s REST polling fallback.
-- **Exception Queue**: Side-by-side transaction inspection, Claude AI rationale badges, confidence score meters, and manual mapping modal.
+### 5.1. 3-Level Reconciliation Engine
+- **Level 0 (Deterministic UTR & Amount Match)**: Correlates bank credits with Razorpay settlement headers.
+- **Level 1 (Batch Integrity Gate)**: Mathematical integrity check ($\sum \text{Net} == \text{Bank Credit}$). Stops cascade errors immediately.
+- **Level 2 (Order Unpacking)**: Matches constituent payments (`pay_...`) to internal order records (`order_...`).
 
-### 4.4. Human-in-the-Loop (HITL) Draft Actions
-- Auto-drafts vendor inquiry emails (for unrecorded invoices) and adjusting journal entries (for bank fees/refunds).
-- Inline-editable UI for analyst adjustments before approval.
-- Idempotent execution with sandboxed email/ledger dispatch.
+### 5.2. Claude 3.5 Sonnet Settlement Variance Reasoner (Pass 3)
+- Bounded batch reasoning over complex multi-order variances and unrecorded orders.
+- Produces forensic citations calculating gross order value, exact MDR% applied, 18% GST on MDR, and net variance.
 
-### 4.5. Forensic Agent Chat
-- Server-Sent Events (SSE) streaming chat drawer.
-- Read-only tools scoped to `run_id` (`query_matches`, `query_exceptions`, `query_audit_log`, `get_record_by_id`).
-- Automated audit logging for every tool execution.
+### 5.3. Settlement Reconciliation Worksheet UI
+- Interactive modal showing high-level bank credit, gross order volume, total gateway fees, claimable GST ITC, and granular line item tables.
+- Exception queue grouped by parent `settlement_id`.
 
-### 4.6. Immutable Audit Trail
-- Append-only MongoDB collection with schema-level mutation blocks on updates and deletes.
+### 5.4. Human-in-the-Loop (HITL) Draft Remediation
+- Auto-generates vendor inquiries for missing invoices and adjusting journal entries for bank charges and refunds.
+- Analyst inline editing and approval gates before dispatch.
+
+### 5.5. Conversational Forensic Auditor
+- Read-only streaming agent drawer with scoped query tools: `query_settlements`, `get_settlement_detail`, `query_matches`, `query_exceptions`, `query_audit_log`.
+
+### 5.6. Immutable Append-Only Audit Trail
+- Cryptographically verified, mutation-blocked audit records documenting every pass, rule evaluation, and human decision.

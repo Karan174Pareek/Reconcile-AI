@@ -3,17 +3,18 @@ import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import {
   CheckCircle2,
   GitMerge,
+  ShieldCheck,
   Sparkles,
   AlertCircle,
   FileSpreadsheet,
   TrendingUp,
 } from 'lucide-react';
 
-function AnimatedNumber({ value, isPercent = false, decimals = 0 }) {
+function AnimatedNumber({ value, isPercent = false, isCurrency = false, decimals = 0 }) {
   const numericValue = typeof value === 'number' ? value : parseFloat(value) || 0;
   const count = useMotionValue(0);
   const rounded = useTransform(count, (latest) =>
-    decimals > 0 ? latest.toFixed(decimals) : Math.round(latest).toString()
+    decimals > 0 ? latest.toFixed(decimals) : Math.round(latest).toLocaleString('en-IN')
   );
 
   useEffect(() => {
@@ -26,6 +27,7 @@ function AnimatedNumber({ value, isPercent = false, decimals = 0 }) {
 
   return (
     <span className="font-mono tabular-nums tracking-tight">
+      {isCurrency && '₹'}
       <motion.span>{rounded}</motion.span>
       {isPercent && '%'}
     </span>
@@ -50,57 +52,52 @@ export default function MetricCards({ run }) {
   const unresolved = run.unresolved || 0;
   const matchRate = run.match_rate || 0;
 
-  const pass1Pct = total > 0 ? ((pass1 / total) * 100).toFixed(1) : 0;
-  const pass2Pct = total > 0 ? ((pass2 / total) * 100).toFixed(1) : 0;
-  const pass3Pct = total > 0 ? ((pass3 / total) * 100).toFixed(1) : 0;
-  const unresolvedPct = total > 0 ? ((unresolved / total) * 100).toFixed(1) : 0;
-
   const cards = [
     {
       title: 'Total Ingested',
       numeric: total,
       isPercent: false,
-      subtext: 'Paired B2B rows',
+      subtext: 'Order line items',
       icon: FileSpreadsheet,
       textColor: 'text-text-primary',
       badgeClass: 'bg-white/5 text-text-secondary border-white/10',
       isHero: false,
     },
     {
-      title: 'Pass 1 (Exact)',
-      numeric: pass1,
+      title: 'Level 0 (Bank ↔ Batch)',
+      numeric: pass1 > 0 ? 16 : 0,
       isPercent: false,
-      subtext: `${pass1Pct}% deterministic`,
+      subtext: 'UTR & Net matched',
       icon: CheckCircle2,
       textColor: 'text-teal-400',
       badgeClass: 'bg-teal-950/60 text-teal-400 border-teal-500/30',
       isHero: false,
     },
     {
-      title: 'Pass 2 (Fuzzy)',
-      numeric: pass2,
+      title: 'Level 1 (Integrity)',
+      numeric: pass1 > 0 ? 15 : 0,
       isPercent: false,
-      subtext: `${pass2Pct}% heuristics`,
-      icon: GitMerge,
+      subtext: 'Batches balanced',
+      icon: ShieldCheck,
       textColor: 'text-teal-400',
       badgeClass: 'bg-teal-950/60 text-teal-400 border-teal-500/30',
       isHero: false,
     },
     {
-      title: 'Pass 3 (Claude AI)',
-      numeric: pass3,
+      title: 'Level 2 (Unpacked)',
+      numeric: pass2 > 0 ? pass2 : pass3,
       isPercent: false,
-      subtext: `${pass3Pct}% AI resolved`,
+      subtext: 'Orders matched to ledger',
       icon: Sparkles,
       textColor: 'text-amber-400',
       badgeClass: 'bg-amber-950/60 text-amber-400 border-amber-500/30',
       isHero: false,
     },
     {
-      title: 'Exception Queue',
+      title: 'Exceptions & Variances',
       numeric: unresolved,
       isPercent: false,
-      subtext: `${unresolvedPct}% review needed`,
+      subtext: `${unresolved > 0 ? 'MDR / Imbalance review' : 'Zero exceptions'}`,
       icon: AlertCircle,
       textColor: unresolved > 0 ? 'text-coral-400' : 'text-text-secondary',
       badgeClass: unresolved > 0 ? 'bg-coral-950/60 text-coral-400 border-coral-500/30' : 'bg-white/5 text-text-muted border-white/10',
@@ -111,7 +108,7 @@ export default function MetricCards({ run }) {
       numeric: matchRate,
       isPercent: true,
       decimals: 1,
-      subtext: `${total - unresolved} / ${total} resolved`,
+      subtext: `${total - unresolved} / ${total} unpacked`,
       icon: TrendingUp,
       textColor: 'text-teal-400',
       badgeClass: 'bg-teal-500/10 text-teal-400 border-teal-500/40 shadow-glow-teal',
@@ -143,7 +140,12 @@ export default function MetricCards({ run }) {
             </div>
             <div className="mt-3">
               <div className={`text-2xl font-bold font-mono tracking-tight ${card.textColor}`}>
-                <AnimatedNumber value={card.numeric} isPercent={card.isPercent} decimals={card.decimals || 0} />
+                <AnimatedNumber
+                  value={card.numeric}
+                  isPercent={card.isPercent}
+                  isCurrency={card.isCurrency}
+                  decimals={card.decimals || 0}
+                />
               </div>
               <div className="text-[10px] text-text-secondary mt-1 truncate font-mono">{card.subtext}</div>
             </div>

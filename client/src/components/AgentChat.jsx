@@ -17,10 +17,10 @@ const API_BASE = import.meta.env.VITE_SERVER_URL
   : 'http://localhost:5000/api';
 
 const QUICK_PROMPTS = [
-  'Show high-confidence exceptions and their rationales',
-  'What bank fee charges were identified without ledger records?',
-  'Give me a breakdown of verified exact vs fuzzy matches',
-  'Inspect recent audit trail log entries for this run',
+  'Why does settlement batch setl_... have a batch imbalance?',
+  'What is our total claimable GST Input Tax Credit (18%) this cycle?',
+  'List all unrecorded Razorpay orders settled without ledger entries',
+  'Show MDR fee breakdown across all balanced settlement batches',
 ];
 
 export default function AgentChat({ runId, isOpen, onClose }) {
@@ -28,7 +28,7 @@ export default function AgentChat({ runId, isOpen, onClose }) {
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Hello! I am your **ReconcileAI Forensic Assistant**. I have live read-only access to query matches, exceptions, and audit logs for **Run ${runId || 'N/A'}**.\n\nHow can I assist your reconciliation audit?`,
+      content: `Hello! I am your **ReconcileAI Forensic Settlement Auditor**. I have real-time read-only access to inspect Razorpay settlement batches, batch integrity statuses, unpacked order line items, MDR fee variances, and GST Input Tax Credits (ITC) for **Run ${runId || 'N/A'}**.\n\nHow can I assist your settlement audit?`,
       tools: [],
     },
   ]);

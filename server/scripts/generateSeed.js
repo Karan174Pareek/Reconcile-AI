@@ -275,7 +275,7 @@ export async function seedDatabase() {
   const initialRun = await Run.create({
     run_id: runId,
     total_records: data.settlementLineItems.length,
-    status: 'ready',
+    status: 'pending',
     pass1_matched: 0,
     pass2_matched: 0,
     pass3_matched: 0,
