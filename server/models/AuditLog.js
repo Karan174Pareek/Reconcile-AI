@@ -45,13 +45,13 @@ const AuditLogSchema = new mongoose.Schema(
   }
 );
 
-// Prevent updating audit log entries to guarantee append-only audit trail
-AuditLogSchema.pre('updateOne', function (next) {
-  next(new Error('AuditLog records are append-only and cannot be modified.'));
+// Prevent updating or deleting audit log entries to guarantee append-only audit trail
+AuditLogSchema.pre(['updateOne', 'updateMany', 'findOneAndUpdate', 'replaceOne', 'findOneAndReplace'], function (next) {
+  next(new Error('AuditLog records are strictly append-only and cannot be modified.'));
 });
 
-AuditLogSchema.pre('findOneAndUpdate', function (next) {
-  next(new Error('AuditLog records are append-only and cannot be modified.'));
+AuditLogSchema.pre(['deleteOne', 'deleteMany', 'findOneAndDelete'], function (next) {
+  next(new Error('AuditLog records are strictly append-only and cannot be deleted.'));
 });
 
 AuditLogSchema.index({ run_id: 1, target_type: 1, timestamp: -1 });

@@ -13,6 +13,7 @@ import {
 } from '../controllers/matchingController.js';
 import { getRunExceptions } from '../controllers/exceptionController.js';
 import { getRunDraftActions } from '../controllers/draftActionController.js';
+import { getRunAuditLogs } from '../controllers/auditLogController.js';
 import { streamAgentChat } from '../controllers/chatController.js';
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.get('/', listRuns);
 router.get('/:run_id', getRunDetails);
 router.get('/:run_id/exceptions', getRunExceptions);
 router.get('/:run_id/draft-actions', getRunDraftActions);
+router.get('/:run_id/audit-log', getRunAuditLogs);
 
 // Ingestion endpoints
 router.post('/upload', uploadMiddleware, uploadCsvFiles);

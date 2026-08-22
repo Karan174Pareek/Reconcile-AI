@@ -79,6 +79,18 @@ export default function Navbar({
               <Send className="h-3.5 w-3.5" />
               <span>Draft Actions</span>
             </button>
+
+            <button
+              onClick={() => onSelectTab('audit_trail')}
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                activeTab === 'audit_trail'
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+            >
+              <FileCheck2 className="h-3.5 w-3.5" />
+              <span>Audit Trail</span>
+            </button>
           </nav>
 
           {/* Run Selector & Actions */}

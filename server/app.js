@@ -19,6 +19,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 import runsRouter from './routes/runs.js';
 import exceptionsRouter from './routes/exceptions.js';
 import draftActionsRouter from './routes/draftActions.js';
+import auditLogsRouter from './routes/auditLogs.js';
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -33,6 +34,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/runs', runsRouter);
 app.use('/api/exceptions', exceptionsRouter);
 app.use('/api/draft-actions', draftActionsRouter);
+app.use('/api/audit-logs', auditLogsRouter);
 
 // Standard 404 handler
 app.use((req, res, next) => {

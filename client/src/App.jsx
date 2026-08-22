@@ -6,6 +6,7 @@ import MetricCards from './components/MetricCards.jsx';
 import LiveProgressStepper from './components/LiveProgressStepper.jsx';
 import ExceptionQueue from './components/ExceptionQueue.jsx';
 import DraftActionsQueue from './components/DraftActionsQueue.jsx';
+import AuditLog from './components/AuditLog.jsx';
 import AgentChat from './components/AgentChat.jsx';
 import { useRunSocket } from './hooks/useRunSocket.js';
 import {
@@ -186,6 +187,12 @@ export default function App() {
             {activeTab === 'draft_actions' && (
               <div className="animate-fadeIn">
                 <DraftActionsQueue runId={activeRunId} />
+              </div>
+            )}
+
+            {activeTab === 'audit_trail' && (
+              <div className="animate-fadeIn">
+                <AuditLog runId={activeRunId} />
               </div>
             )}
           </>
