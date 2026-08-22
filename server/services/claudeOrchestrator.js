@@ -23,8 +23,8 @@ import AuditLog from '../models/AuditLog.js';
  */
 function getAnthropicClient(customClient = null) {
   if (customClient) return customClient;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey === 'mock-key' || apiKey === 'your_anthropic_api_key_here') {
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  if (!apiKey || apiKey === 'mock-key' || apiKey.includes('placeholder') || apiKey.includes('your_anthropic')) {
     return null; // Signals orchestrator to use fallback reasoning in dev/testing if no live API key
   }
   return new Anthropic({ apiKey });

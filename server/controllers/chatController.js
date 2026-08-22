@@ -43,8 +43,8 @@ export async function streamAgentChat(req, res, next) {
       return res.end();
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    const isLiveApiKey = apiKey && apiKey !== 'mock-key' && apiKey !== 'your_anthropic_api_key_here';
+    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+    const isLiveApiKey = apiKey && apiKey !== 'mock-key' && !apiKey.includes('placeholder') && !apiKey.includes('your_anthropic');
 
     if (!isLiveApiKey) {
       // Deterministic tool-using offline assistant for testing/development
