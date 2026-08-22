@@ -4,6 +4,9 @@ An intelligent finance reconciliation system that automatically matches bank tra
 
 Built for the **Razorpay AI Buildathon 2026** (*Finance Controller track*).
 
+🎥 **Demo Video Recording**: [**`docs/demo-recording.webm`**](./docs/demo-recording.webm)  
+🎬 **5-Minute Pitch Script**: [**`DEMO_SCRIPT.md`**](./DEMO_SCRIPT.md)
+
 ---
 
 ## The Problem
@@ -35,6 +38,29 @@ ReconcileAI automates this process end to end. Given a bank statement and a ledg
 - **A query interface** — instead of scrolling through spreadsheets, you can ask directly: *"Why is this transaction still unresolved?"* or *"Show me all the bank fees this week"* and get an answer pulled from the actual data.
 - **A human approval step for any action** — if the system identifies something it can help resolve (like drafting a follow-up email about a missing invoice), it prepares the draft but never sends anything or changes any record without a person explicitly approving it first.
 - **A complete audit trail** — every match and every decision is logged and traceable, so nothing is a black box.
+
+---
+
+## 📸 Screenshots & Interface Walkthrough
+
+### 1. Live Pipeline Dashboard & Real-Time Stepper
+*Real-time Socket.io multi-pass progress stepper (Pass 1 Exact → Pass 2 Fuzzy → Pass 3 Claude AI), ticker cards, and live activity stream console.*
+
+![Live Pipeline Dashboard](./docs/screenshots/dashboard.png)
+
+---
+
+### 2. Interactive Exception Queue & Forensic AI Reasoning
+*Side-by-side transaction inspection showing Bank details vs ERP ledger candidates, Claude's cited rationales, confidence scores, and manual mapping controls.*
+
+![Exception Queue](./docs/screenshots/exception-queue.png)
+
+---
+
+### 3. Conversational Forensic Agent Chat (Tool-Use Stream)
+*Slide-over drawer streaming Server-Sent Events (SSE) responses, executing read-only MongoDB tool calls (`query_exceptions`, `get_record_by_id`) with cited record IDs.*
+
+![Forensic Agent Chat](./docs/screenshots/agent-chat.png)
 
 ---
 
