@@ -9,7 +9,9 @@ import {
 import Run from '../models/Run.js';
 import BankRecord from '../models/BankRecord.js';
 import LedgerRecord from '../models/LedgerRecord.js';
-import { generateSyntheticDataset } from '../scripts/generateSeed.js';
+import SettlementReport from '../models/SettlementReport.js';
+import SettlementLineItem from '../models/SettlementLineItem.js';
+import { generateRazorpaySeedData } from '../scripts/generateSeed.js';
 
 // Configure Multer for in-memory CSV file handling (up to 25MB per file)
 const storage = multer.memoryStorage();
@@ -30,6 +32,8 @@ export const uploadMiddleware = multer({
 }).fields([
   { name: 'bank_csv', maxCount: 1 },
   { name: 'ledger_csv', maxCount: 1 },
+  { name: 'settlements_csv', maxCount: 1 },
+  { name: 'line_items_csv', maxCount: 1 },
 ]);
 
 /**
@@ -64,11 +68,9 @@ export async function uploadCsvFiles(req, res, next) {
       });
     }
 
-    // 1. Parse CSV buffers
     const bankRows = parseCsvBuffer(files.bank_csv[0].buffer);
     const ledgerRows = parseCsvBuffer(files.ledger_csv[0].buffer);
 
-    // 2. Strict Zod schema validation
     const { validRecords: validBankRows, errors: bankErrors } = validateCsvRows(
       bankRows,
       BankRecordRowSchema,
@@ -80,7 +82,6 @@ export async function uploadCsvFiles(req, res, next) {
       'ledger'
     );
 
-    // If there are any validation errors, reject upfront with detailed row errors
     if (bankErrors.length > 0 || ledgerErrors.length > 0) {
       return res.status(400).json({
         error: {
@@ -94,10 +95,8 @@ export async function uploadCsvFiles(req, res, next) {
       });
     }
 
-    // 3. Create unique Run ID
     const runId = req.body.run_id || `RUN-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
 
-    // Format Bank Records
     const bankDocs = validBankRows.map((row) => ({
       id: row.id || `BNK-${crypto.randomUUID().substring(0, 8)}`,
       run_id: runId,
@@ -108,7 +107,6 @@ export async function uploadCsvFiles(req, res, next) {
       status: 'pending',
     }));
 
-    // Format Ledger Records
     const ledgerDocs = validLedgerRows.map((row) => ({
       id: row.id || `LED-${crypto.randomUUID().substring(0, 8)}`,
       run_id: runId,
@@ -119,21 +117,62 @@ export async function uploadCsvFiles(req, res, next) {
       status: 'pending',
     }));
 
-    // 4. Persist to MongoDB
+    // If optional settlement files were also uploaded
+    let settlementDocs = [];
+    let lineItemDocs = [];
+    if (files.settlements_csv) {
+      const setlRows = parseCsvBuffer(files.settlements_csv[0].buffer);
+      settlementDocs = setlRows.map((r) => ({
+        run_id: runId,
+        settlement_id: r.settlement_id,
+        amount: Number(r.amount) || 0,
+        gross_amount: Number(r.gross_amount) || 0,
+        fees: Number(r.fees) || 0,
+        tax: Number(r.tax) || 0,
+        refunds: Number(r.refunds) || 0,
+        utr: r.utr,
+        status: r.status || 'settled',
+        settled_at: new Date(r.settled_at || r.date || new Date()),
+        item_count: Number(r.item_count) || 0,
+      }));
+    }
+
+    if (files.line_items_csv) {
+      const lineRows = parseCsvBuffer(files.line_items_csv[0].buffer);
+      lineItemDocs = lineRows.map((r) => ({
+        run_id: runId,
+        settlement_id: r.settlement_id,
+        payment_id: r.payment_id,
+        order_id: r.order_id,
+        type: r.type || 'payment',
+        amount: Number(r.amount) || 0,
+        fee: Number(r.fee) || 0,
+        tax: Number(r.tax) || 0,
+        debit: Number(r.debit) || 0,
+        credit: Number(r.credit) || 0,
+        net_amount: Number(r.net_amount) || 0,
+        settled_at: new Date(r.settled_at || r.date || new Date()),
+      }));
+    }
+
+    const totalRecords = lineItemDocs.length > 0 ? lineItemDocs.length : bankDocs.length;
+
     await Run.create({
       run_id: runId,
       status: 'pending',
-      total_records: bankDocs.length,
+      total_records: totalRecords,
       pass1_matched: 0,
       pass2_matched: 0,
       pass3_matched: 0,
-      unresolved: bankDocs.length,
+      unresolved: totalRecords,
       match_rate: 0.0,
       created_at: new Date(),
     });
 
     await BankRecord.insertMany(bankDocs);
     await LedgerRecord.insertMany(ledgerDocs);
+    if (settlementDocs.length > 0) await SettlementReport.insertMany(settlementDocs);
+    if (lineItemDocs.length > 0) await SettlementLineItem.insertMany(lineItemDocs);
 
     return res.status(201).json({
       success: true,
@@ -141,6 +180,8 @@ export async function uploadCsvFiles(req, res, next) {
       run_id: runId,
       total_bank_records: bankDocs.length,
       total_ledger_records: ledgerDocs.length,
+      total_settlement_batches: settlementDocs.length,
+      total_line_items: lineItemDocs.length,
     });
   } catch (error) {
     next(error);
@@ -153,26 +194,20 @@ export async function uploadCsvFiles(req, res, next) {
  */
 export async function generateSeedRun(req, res, next) {
   try {
-    const count = parseInt(req.body.count, 10) || 500;
     const runId = req.body.run_id || `RUN-SEED-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
 
-    const dataset = generateSyntheticDataset(count, runId);
-    const { bankRecords, ledgerRecords, stats } = dataset;
-
-    // Clean internal metadata tags before DB insertion
-    const cleanBank = bankRecords.map(({ _meta_category, ...rec }) => rec);
-    const cleanLedger = ledgerRecords.map(({ _meta_category, ...rec }) => rec);
+    const data = await generateRazorpaySeedData(runId);
 
     await Run.findOneAndUpdate(
       { run_id: runId },
       {
         run_id: runId,
         status: 'pending',
-        total_records: cleanBank.length,
+        total_records: data.settlementLineItems.length,
         pass1_matched: 0,
         pass2_matched: 0,
         pass3_matched: 0,
-        unresolved: cleanBank.length,
+        unresolved: data.settlementLineItems.length,
         match_rate: 0.0,
         created_at: new Date(),
         completed_at: null,
@@ -180,14 +215,21 @@ export async function generateSeedRun(req, res, next) {
       { upsert: true, new: true }
     );
 
-    await BankRecord.insertMany(cleanBank);
-    await LedgerRecord.insertMany(cleanLedger);
+    await BankRecord.insertMany(data.bankRecords);
+    await LedgerRecord.insertMany(data.ledgerRecords);
+    await SettlementReport.insertMany(data.settlementReports);
+    await SettlementLineItem.insertMany(data.settlementLineItems);
 
     return res.status(201).json({
       success: true,
-      message: `Synthetic seed dataset generated for run ${runId}`,
+      message: `Razorpay Settlement Seed dataset generated for run ${runId}`,
       run_id: runId,
-      stats,
+      stats: {
+        bank_credits: data.bankRecords.length,
+        settlement_batches: data.settlementReports.length,
+        total_order_line_items: data.settlementLineItems.length,
+        ledger_records: data.ledgerRecords.length,
+      },
     });
   } catch (error) {
     next(error);

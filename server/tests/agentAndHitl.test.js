@@ -4,13 +4,15 @@ import { CLAUDE_AGENT_TOOLS } from '../services/agentToolRouter.js';
 import { cleanJsonResponse } from '../services/claudeOrchestrator.js';
 
 test('CLAUDE_AGENT_TOOLS: definitions have strict JSON schema and proper tool names', () => {
-  assert.equal(CLAUDE_AGENT_TOOLS.length, 4);
+  assert.ok(CLAUDE_AGENT_TOOLS.length >= 4);
 
   const toolNames = CLAUDE_AGENT_TOOLS.map((t) => t.name);
   assert.ok(toolNames.includes('query_matches'));
   assert.ok(toolNames.includes('query_exceptions'));
   assert.ok(toolNames.includes('query_audit_log'));
   assert.ok(toolNames.includes('get_record_by_id'));
+  assert.ok(toolNames.includes('query_settlements'));
+  assert.ok(toolNames.includes('get_settlement_detail'));
 
   for (const tool of CLAUDE_AGENT_TOOLS) {
     assert.ok(tool.description.length > 10);

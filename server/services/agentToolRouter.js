@@ -1,5 +1,7 @@
 import BankRecord from '../models/BankRecord.js';
 import LedgerRecord from '../models/LedgerRecord.js';
+import SettlementReport from '../models/SettlementReport.js';
+import SettlementLineItem from '../models/SettlementLineItem.js';
 import Match from '../models/Match.js';
 import Exception from '../models/Exception.js';
 import DraftAction from '../models/DraftAction.js';
@@ -10,16 +12,55 @@ import AuditLog from '../models/AuditLog.js';
  */
 export const CLAUDE_AGENT_TOOLS = [
   {
-    name: 'query_matches',
+    name: 'query_settlements',
     description:
-      'Search and list matched records for this reconciliation run. Useful for answering questions about successful exact, fuzzy, or AI matches.',
+      'List and inspect Razorpay settlement batches for this run, including gross amounts, MDR fees, 18% GST tax, and integrity status.',
     input_schema: {
       type: 'object',
       properties: {
+        integrity_status: {
+          type: 'string',
+          enum: ['balanced', 'imbalanced', 'pending'],
+          description: 'Filter by integrity check status',
+        },
+        limit: {
+          type: 'integer',
+          description: 'Max records to return (default 20, max 50)',
+        },
+      },
+    },
+  },
+  {
+    name: 'get_settlement_detail',
+    description:
+      'Lookup complete unpacked reconciliation worksheet for a specific Razorpay settlement_id, including its bank credit and all constituent order line items.',
+    input_schema: {
+      type: 'object',
+      required: ['settlement_id'],
+      properties: {
+        settlement_id: {
+          type: 'string',
+          description: 'The unique settlement ID (e.g. setl_xxx)',
+        },
+      },
+    },
+  },
+  {
+    name: 'query_matches',
+    description:
+      'Search and list matched records across Level 0 (Bank-Settlement), Level 1 (Batch Integrity), or Level 2 (Order Unpacking).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        level: {
+          type: 'integer',
+          enum: [0, 1, 2],
+          description: 'Reconciliation hierarchy level (0: Bank<->Settlement, 1: Integrity, 2: Order Unpacking)',
+        },
         method: {
           type: 'string',
-          enum: ['exact', 'fuzzy', 'ai'],
-          description: 'Filter matches by method (exact, fuzzy, or ai)',
+          enum: ['exact', 'fuzzy', 'ai', 'batch_integrity'],
+          description: 'Filter matches by method',
         },
         min_confidence: {
           type: 'number',
@@ -35,14 +76,29 @@ export const CLAUDE_AGENT_TOOLS = [
   {
     name: 'query_exceptions',
     description:
-      'Search and inspect unresolved or categorized exception records for this reconciliation run.',
+      'Search and inspect diagnosed settlement exceptions and variances (MDR fee, GST ITC deductions, refunds, batch imbalances, unrecorded orders).',
     input_schema: {
       type: 'object',
       properties: {
+        settlement_id: {
+          type: 'string',
+          description: 'Filter exceptions belonging to a specific settlement batch',
+        },
         category: {
           type: 'string',
-          enum: ['duplicate', 'refund', 'bank_fee', 'timing_lag', 'unrecorded', 'unknown'],
-          description: 'Filter by diagnosed exception category',
+          enum: [
+            'mdr_fee',
+            'gst_on_mdr',
+            'refund_deduction',
+            'rounding',
+            'partial_settlement',
+            'unrecorded',
+            'batch_imbalance',
+            'duplicate',
+            'timing_lag',
+            'unknown',
+          ],
+          description: 'Filter by diagnosed variance category',
         },
         human_decision: {
           type: 'string',
@@ -65,7 +121,7 @@ export const CLAUDE_AGENT_TOOLS = [
       properties: {
         target_type: {
           type: 'string',
-          enum: ['match', 'exception', 'draft_action', 'agent_query'],
+          enum: ['match', 'exception', 'draft_action', 'agent_query', 'settlement'],
           description: 'Filter audit logs by target type',
         },
         limit: {
@@ -78,14 +134,22 @@ export const CLAUDE_AGENT_TOOLS = [
   {
     name: 'get_record_by_id',
     description:
-      'Lookup a specific single record by its ID across bank_records, ledger_records, matches, exceptions, or draft_actions collections.',
+      'Lookup a specific single record by its ID across bank_records, ledger_records, settlement_reports, settlement_line_items, matches, exceptions, or draft_actions collections.',
     input_schema: {
       type: 'object',
       required: ['collection', 'id'],
       properties: {
         collection: {
           type: 'string',
-          enum: ['bank_records', 'ledger_records', 'matches', 'exceptions', 'draft_actions'],
+          enum: [
+            'bank_records',
+            'ledger_records',
+            'settlement_reports',
+            'settlement_line_items',
+            'matches',
+            'exceptions',
+            'draft_actions',
+          ],
           description: 'The target collection name',
         },
         id: {
@@ -98,131 +162,206 @@ export const CLAUDE_AGENT_TOOLS = [
 ];
 
 /**
- * Executes a read-only tool query securely scoped to the provided run_id.
- * Mutating queries are strictly rejected.
- * Logs every invocation directly into AuditLog.
- *
- * @param {string} runId
- * @param {string} toolName
- * @param {object} toolInput
- * @returns {Promise<object>}
+ * Dispatches a tool call from Claude Conversational Agent securely (read-only execution)
  */
-export async function executeAgentTool(runId, toolName, toolInput = {}) {
-  const limit = Math.min(50, Math.max(1, parseInt(toolInput.limit, 10) || 20));
+export async function executeAgentTool(runId, toolName, inputArgs = {}) {
+  const limit = Math.min(Math.max(1, Number(inputArgs.limit) || 20), 50);
 
-  let resultData = null;
+  switch (toolName) {
+    case 'query_settlements': {
+      const query = { run_id: runId };
+      if (inputArgs.integrity_status) query.integrity_status = inputArgs.integrity_status;
 
-  try {
-    switch (toolName) {
-      case 'query_matches': {
-        const query = { run_id: runId };
-        if (toolInput.method) query.method = toolInput.method;
-        if (typeof toolInput.min_confidence === 'number') {
-          query.confidence = { $gte: toolInput.min_confidence };
-        }
+      const settlements = await SettlementReport.find(query)
+        .limit(limit)
+        .sort({ settled_at: -1 })
+        .lean();
 
-        const matches = await Match.find(query).limit(limit).lean();
-        resultData = {
-          count: matches.length,
-          matches: matches.map((m) => ({
-            bank_record_id: m.bank_record_id,
-            ledger_record_id: m.ledger_record_id,
-            method: m.method,
-            confidence: m.confidence,
-            rationale: m.rationale,
-          })),
-        };
-        break;
-      }
-
-      case 'query_exceptions': {
-        const query = { run_id: runId };
-        if (toolInput.category) query.category = toolInput.category;
-        if (toolInput.human_decision) query.human_decision = toolInput.human_decision;
-
-        const exceptions = await Exception.find(query).limit(limit).lean();
-        resultData = {
-          count: exceptions.length,
-          exceptions: exceptions.map((e) => ({
-            id: e.id,
-            bank_record_id: e.bank_record_id,
-            category: e.category,
-            confidence: e.confidence,
-            ai_rationale: e.ai_rationale,
-            human_decision: e.human_decision,
-            candidate_ledger_ids: e.candidate_ledger_ids,
-          })),
-        };
-        break;
-      }
-
-      case 'query_audit_log': {
-        const query = { run_id: runId };
-        if (toolInput.target_type) query.target_type = toolInput.target_type;
-
-        const logs = await AuditLog.find(query).sort({ timestamp: -1 }).limit(limit).lean();
-        resultData = {
-          count: logs.length,
-          logs: logs.map((l) => ({
-            actor: l.actor,
-            action: l.action,
-            target_type: l.target_type,
-            target_id: l.target_id,
-            timestamp: l.timestamp,
-            details: l.details,
-          })),
-        };
-        break;
-      }
-
-      case 'get_record_by_id': {
-        const { collection, id } = toolInput;
-        if (!collection || !id) {
-          resultData = { error: 'Missing collection or id parameter' };
-          break;
-        }
-
-        let doc = null;
-        if (collection === 'bank_records') {
-          doc = await BankRecord.findOne({ run_id: runId, $or: [{ id }, { utr_ref: id }] }).lean();
-        } else if (collection === 'ledger_records') {
-          doc = await LedgerRecord.findOne({ run_id: runId, $or: [{ id }, { invoice_ref: id }] }).lean();
-        } else if (collection === 'matches') {
-          doc = await Match.findOne({ run_id: runId, $or: [{ bank_record_id: id }, { ledger_record_id: id }] }).lean();
-        } else if (collection === 'exceptions') {
-          doc = await Exception.findOne({ run_id: runId, $or: [{ id }, { bank_record_id: id }] }).lean();
-        } else if (collection === 'draft_actions') {
-          doc = await DraftAction.findOne({ run_id: runId, $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { exception_id: id }] }).lean();
-        } else {
-          resultData = { error: `Unsupported collection "${collection}"` };
-          break;
-        }
-
-        resultData = doc ? { found: true, record: doc } : { found: false, message: `Record "${id}" not found in ${collection}` };
-        break;
-      }
-
-      default:
-        resultData = { error: `Unknown tool "${toolName}"` };
+      return {
+        count: settlements.length,
+        settlements: settlements.map((s) => ({
+          settlement_id: s.settlement_id,
+          amount: s.amount,
+          gross_amount: s.gross_amount,
+          fees: s.fees,
+          tax: s.tax,
+          refunds: s.refunds,
+          utr: s.utr,
+          status: s.status,
+          integrity_status: s.integrity_status,
+          settled_at: s.settled_at,
+          item_count: s.item_count,
+        })),
+      };
     }
 
-    // Append-only audit logging of tool invocation
-    await AuditLog.create({
-      run_id: runId,
-      actor: 'claude',
-      action: 'agent_query',
-      target_type: 'agent_query',
-      target_id: toolName,
-      details: {
-        tool_name: toolName,
-        tool_input: toolInput,
-        result_count: resultData?.count || (resultData?.found ? 1 : 0),
-      },
-    });
+    case 'get_settlement_detail': {
+      const { settlement_id } = inputArgs;
+      if (!settlement_id) return { error: 'settlement_id is required' };
 
-    return resultData;
-  } catch (err) {
-    console.error(`[Agent Tool Error] ${toolName}:`, err);
-    return { error: err.message };
+      const settlement = await SettlementReport.findOne({ run_id: runId, settlement_id }).lean();
+      if (!settlement) return { error: `Settlement "${settlement_id}" not found` };
+
+      const lineItems = await SettlementLineItem.find({ run_id: runId, settlement_id })
+        .limit(100)
+        .lean();
+
+      const bankRecord = settlement.bank_record_id
+        ? await BankRecord.findOne({ run_id: runId, id: settlement.bank_record_id }).lean()
+        : null;
+
+      return {
+        settlement,
+        bankRecord,
+        line_items_count: lineItems.length,
+        line_items: lineItems.map((li) => ({
+          payment_id: li.payment_id,
+          order_id: li.order_id,
+          type: li.type,
+          amount: li.amount,
+          fee: li.fee,
+          tax: li.tax,
+          net_amount: li.net_amount,
+          unpacked_status: li.unpacked_status,
+          variance_category: li.variance_category,
+        })),
+      };
+    }
+
+    case 'query_matches': {
+      const query = { run_id: runId };
+      if (inputArgs.level !== undefined) query.level = inputArgs.level;
+      if (inputArgs.method) query.method = inputArgs.method;
+      if (inputArgs.min_confidence !== undefined) {
+        query.confidence = { $gte: Number(inputArgs.min_confidence) };
+      }
+
+      const matches = await Match.find(query).limit(limit).sort({ created_at: -1 }).lean();
+      return {
+        count: matches.length,
+        matches: matches.map((m) => ({
+          level: m.level,
+          bank_record_id: m.bank_record_id,
+          settlement_id: m.settlement_id,
+          payment_id: m.payment_id,
+          order_id: m.order_id,
+          ledger_record_id: m.ledger_record_id,
+          method: m.method,
+          confidence: m.confidence,
+          rationale: m.rationale,
+          variance_category: m.variance_category,
+        })),
+      };
+    }
+
+    case 'query_exceptions': {
+      const query = { run_id: runId };
+      if (inputArgs.settlement_id) query.settlement_id = inputArgs.settlement_id;
+      if (inputArgs.category) query.category = inputArgs.category;
+      if (inputArgs.human_decision) query.human_decision = inputArgs.human_decision;
+
+      const exceptions = await Exception.find(query).limit(limit).sort({ created_at: -1 }).lean();
+      return {
+        count: exceptions.length,
+        exceptions: exceptions.map((e) => ({
+          id: e._id?.toString() || e.id,
+          settlement_id: e.settlement_id,
+          payment_id: e.payment_id,
+          order_id: e.order_id,
+          bank_record_id: e.bank_record_id,
+          category: e.category,
+          expected_amount: e.expected_amount,
+          settled_amount: e.settled_amount,
+          variance_amount: e.variance_amount,
+          variance_breakdown: e.variance_breakdown,
+          ai_rationale: e.ai_rationale,
+          confidence: e.confidence,
+          human_decision: e.human_decision,
+        })),
+      };
+    }
+
+    case 'query_audit_log': {
+      const query = { run_id: runId };
+      if (inputArgs.target_type) query.target_type = inputArgs.target_type;
+
+      const logs = await AuditLog.find(query).limit(limit).sort({ timestamp: -1 }).lean();
+      return {
+        count: logs.length,
+        logs: logs.map((l) => ({
+          id: l._id?.toString(),
+          actor: l.actor,
+          action: l.action,
+          target_type: l.target_type,
+          target_id: l.target_id,
+          timestamp: l.timestamp,
+          details: l.details,
+        })),
+      };
+    }
+
+    case 'get_record_by_id': {
+      const { collection, id } = inputArgs;
+      if (!collection || !id) {
+        return { error: 'Both collection and id are required' };
+      }
+
+      let doc = null;
+      switch (collection) {
+        case 'settlement_reports':
+          doc = await SettlementReport.findOne({
+            run_id: runId,
+            $or: [{ settlement_id: id }, { utr: id }],
+          }).lean();
+          break;
+        case 'settlement_line_items':
+          doc = await SettlementLineItem.findOne({
+            run_id: runId,
+            $or: [{ payment_id: id }, { order_id: id }],
+          }).lean();
+          break;
+        case 'bank_records':
+          doc = await BankRecord.findOne({
+            run_id: runId,
+            $or: [{ id }, { utr_ref: id }],
+          }).lean();
+          break;
+        case 'ledger_records':
+          doc = await LedgerRecord.findOne({
+            run_id: runId,
+            $or: [{ id }, { order_id: id }, { invoice_ref: id }],
+          }).lean();
+          break;
+        case 'matches':
+          doc = await Match.findOne({
+            run_id: runId,
+            $or: [{ bank_record_id: id }, { settlement_id: id }, { payment_id: id }, { order_id: id }],
+          }).lean();
+          break;
+        case 'exceptions':
+          doc = await Exception.findOne({
+            run_id: runId,
+            $or: [{ bank_record_id: id }, { settlement_id: id }, { payment_id: id }, { order_id: id }],
+          }).lean();
+          break;
+        case 'draft_actions':
+          doc = await DraftAction.findOne({
+            run_id: runId,
+            $or: [{ exception_id: id }],
+          }).lean();
+          break;
+        default:
+          return { error: `Invalid collection: ${collection}` };
+      }
+
+      if (!doc) {
+        return { message: `No record found in "${collection}" matching ID "${id}"` };
+      }
+
+      return { collection, record: doc };
+    }
+
+    default:
+      return { error: `Unknown tool: ${toolName}` };
   }
 }

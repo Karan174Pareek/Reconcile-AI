@@ -7,6 +7,12 @@ import Papa from 'papaparse';
 import { connectDB, disconnectDB } from '../config/db.js';
 import BankRecord from '../models/BankRecord.js';
 import LedgerRecord from '../models/LedgerRecord.js';
+import SettlementReport from '../models/SettlementReport.js';
+import SettlementLineItem from '../models/SettlementLineItem.js';
+import Match from '../models/Match.js';
+import Exception from '../models/Exception.js';
+import DraftAction from '../models/DraftAction.js';
+import AuditLog from '../models/AuditLog.js';
 import Run from '../models/Run.js';
 import User from '../models/User.js';
 
@@ -15,475 +21,305 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Realist B2B Vendors & Payees for Mock Data
-const VENDORS = [
-  { name: 'Razorpay Software Pvt Ltd', prefix: 'RAZORPAY', category: 'Payment Gateway' },
-  { name: 'Amazon Web Services India', prefix: 'AWS CLOUD', category: 'Cloud Infrastructure' },
-  { name: 'Google Cloud India Pvt Ltd', prefix: 'GOOGLE WORKSPACE', category: 'SaaS' },
-  { name: 'Microsoft Regional Sales', prefix: 'MSFT AZURE', category: 'Cloud Infrastructure' },
-  { name: 'Slack Technologies LLC', prefix: 'SLACK TECH', category: 'Collaboration' },
-  { name: 'Zoho Corporation Pvt Ltd', prefix: 'ZOHO CORP', category: 'CRM & Accounting' },
-  { name: 'Freshworks Technologies', prefix: 'FRESHWORKS', category: 'Support Tool' },
-  { name: 'Airtel Enterprise Telecom', prefix: 'BHARTI AIRTEL', category: 'Telecommunications' },
-  { name: 'Tata Communications Ltd', prefix: 'TATA COMM', category: 'Networking' },
-  { name: 'WeWork India Management', prefix: 'WEWORK COWORKING', category: 'Real Estate' },
-  { name: 'Swiggy Corporate Catering', prefix: 'SWIGGY B2B', category: 'Corporate Catering' },
-  { name: 'Uber for Business Solutions', prefix: 'UBER BIZ', category: 'Corporate Travel' },
-  { name: 'Delhivery Logistics Ltd', prefix: 'DELHIVERY LOGISTICS', category: 'Freight & Courier' },
-  { name: 'Notion Labs Inc', prefix: 'NOTION HQ', category: 'Productivity' },
-  { name: 'GitHub Enterprise Services', prefix: 'GITHUB INC', category: 'Dev Tools' },
-  { name: 'Atlassian Pty Ltd', prefix: 'ATLASSIAN JIRA', category: 'Dev Tools' },
-  { name: 'HubSpot Ireland Ltd', prefix: 'HUBSPOT MARKETING', category: 'Marketing' },
-  { name: 'Stripe India Payments', prefix: 'STRIPE PAY', category: 'Payment Gateway' },
-  { name: 'KPMG India Advisory', prefix: 'KPMG AUDIT', category: 'Professional Services' },
-  { name: 'PwC India Tax Consulting', prefix: 'PWC CONSULTING', category: 'Tax Advisory' }
+const CUSTOMERS = [
+  'Acme Tech India Pvt Ltd',
+  'Zenith Cloud Solutions',
+  'Nexus Logistics LLP',
+  'Apex Retail Enterprises',
+  'Starlight Media Works',
+  'Kaveri Consumer Goods',
+  'InfraPulse Networks',
+  'BlueHorizon Aerospace',
+  'Vanguard Healthcare Systems',
+  'Solaria Renewable Energy',
+  'MetroMart Groceries',
+  'UrbanCraft Furniture',
+  'Titan Global Corp',
+  'Indus Digital Media',
+  'Orion Consulting Partners',
+  'Spectra Biotech Labs',
+  'Paramount Engineering Works',
+  'Hyperion Financial Advisors',
+  'Zephyr Apparel Retail',
+  'Crestview Automotive Spares',
 ];
 
-const BANK_FEE_DESCRIPTIONS = [
-  'CMS MONTHLY MAINTENANCE CHARGES',
-  'IMPS OUTWARD TXN CONVENIENCE FEE + GST',
-  'BULK RTGS PROCESSING CHARGE',
-  'CURRENT ACCOUNT QUARTERLY LEDGER FOLIO CHG',
-  'CORPORATE NETBANKING TOKEN RENEWAL CHARGE',
-  'BANK GUARANTEE SERVICING FEE'
-];
-
-/**
- * Random helper utilities
- */
-const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
-const randomBetween = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const roundTwoDecimals = (num) => Math.round(num * 100) / 100;
-
-const getRandomDateInPast = (daysBack = 45) => {
-  const target = new Date();
-  const offset = randomBetween(1, daysBack);
-  target.setDate(target.getDate() - offset);
-  target.setHours(randomBetween(9, 18), randomBetween(0, 59), randomBetween(0, 59), 0);
-  return target;
-};
-
-const addDays = (date, days) => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-};
+const randomBetween = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 /**
- * Generate synthetic dataset with realistic distribution
+ * Generates enterprise benchmark dataset for Razorpay Settlement Unpacking
  */
-export function generateSyntheticDataset(totalRecords = 500, runId = `RUN-SEED-${Date.now()}`) {
-  const bankRecords = [];
+export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026') {
+  console.log(`\n=== Generating Enterprise Benchmark Dataset for Run: ${runId} ===`);
+
   const ledgerRecords = [];
+  const settlementReports = [];
+  const settlementLineItems = [];
+  const bankRecords = [];
 
-  // Target distributions:
-  // ~65% exact matches
-  // ~18% timing lag & minor narration fuzziness
-  // ~5% duplicates (duplicate bank records for single ledger entry)
-  // ~5% bank fees (bank charges with no ledger counterpart)
-  // ~3% refunds (negative amounts)
-  // ~2% unrecorded / genuine exceptions (at least 1 guaranteed)
+  const baseDate = new Date('2026-08-01T09:00:00.000Z');
+  let orderCounter = 10001;
+  let paymentCounter = 20001;
+  let setlCounter = 101;
 
-  const exactCount = Math.floor(totalRecords * 0.65);
-  const timingLagCount = Math.floor(totalRecords * 0.18);
-  const duplicateCount = Math.max(2, Math.floor(totalRecords * 0.05));
-  const bankFeeCount = Math.max(2, Math.floor(totalRecords * 0.05));
-  const refundCount = Math.max(2, Math.floor(totalRecords * 0.03));
-  const unrecordedCount = Math.max(1, totalRecords - (exactCount + timingLagCount + duplicateCount + bankFeeCount + refundCount));
+  // We will generate 16 settlement batches totaling 500+ order line items
+  const NUM_BATCHES = 16;
+  const ORDERS_PER_BATCH_AVG = 32; // 16 * 32 ~= 512 records
 
-  let refCounter = 10000;
+  for (let bIdx = 0; bIdx < NUM_BATCHES; bIdx++) {
+    const setlId = `setl_DGlQ${setlCounter}os78Ec`;
+    const utrNumber = `88290${setlCounter}`;
+    const utrRef = `UTR-RAZORPAY-${utrNumber}`;
+    const batchDayOffset = bIdx * 2; // T+2 cadence
+    const txnDate = new Date(baseDate.getTime() + batchDayOffset * 24 * 60 * 60 * 1000);
+    const settledDate = new Date(txnDate.getTime() + 2 * 24 * 60 * 60 * 1000); // T+2 settlement date
 
-  // 1. Perfect Exact Matches (~65%)
-  for (let i = 0; i < exactCount; i++) {
-    refCounter++;
-    const vendor = randomChoice(VENDORS);
-    const amount = roundTwoDecimals(randomBetween(5000, 450000) + Math.random());
-    const date = getRandomDateInPast(30);
-    const utrRef = `UTR-MOCK-${refCounter}`;
-    const invoiceRef = `INV-MOCK-${refCounter}`;
-    const recId = crypto.randomUUID();
+    const isImbalancedBatch = bIdx === 7; // Deliberate test case: Batch 7 fails Level 1 integrity gate
+    const batchOrderCount = randomBetween(26, 36);
 
-    bankRecords.push({
-      id: `BNK-${recId.substring(0, 8)}`,
+    let batchGross = 0;
+    let batchFee = 0;
+    let batchTax = 0;
+    let batchRefund = 0;
+    let batchNet = 0;
+
+    const batchLineItems = [];
+
+    for (let oIdx = 0; oIdx < batchOrderCount; oIdx++) {
+      const orderId = `order_MOCK_${orderCounter++}`;
+      const paymentId = `pay_N09${paymentCounter++}`;
+      const customer = randomChoice(CUSTOMERS);
+      const grossAmount = randomBetween(1200, 38000);
+
+      const isRefund = Math.random() < 0.05; // 5% refund rate
+      const isUnrecorded = Math.random() < 0.04; // 4% unrecorded orders (settled but missing in merchant ledger)
+      const isPartial = Math.random() < 0.03; // 3% partial settlement discrepancy
+
+      if (isRefund) {
+        // Refund line item
+        const refundGross = -grossAmount;
+        const refundFee = 0;
+        const refundTax = 0;
+        const refundNet = refundGross;
+
+        batchRefund += grossAmount;
+        batchNet += refundNet;
+
+        // Merchant ledger may have customer return entry
+        ledgerRecords.push({
+          run_id: runId,
+          id: `LED-${orderId}`,
+          order_id: orderId,
+          invoice_ref: orderId,
+          date: txnDate,
+          amount: refundGross,
+          payee: customer,
+          status: 'pending',
+        });
+
+        batchLineItems.push({
+          run_id: runId,
+          settlement_id: setlId,
+          payment_id: paymentId,
+          order_id: orderId,
+          type: 'refund',
+          amount: refundGross,
+          fee: 0,
+          tax: 0,
+          debit: grossAmount,
+          credit: 0,
+          net_amount: refundNet,
+          currency: 'INR',
+          settled_at: settledDate,
+          unpacked_status: 'pending',
+          variance_category: 'refund_deduction',
+        });
+      } else {
+        // Standard payment
+        const mdrFee = roundTwoDecimals(grossAmount * 0.02); // 2.0% MDR
+        const gstTax = roundTwoDecimals(mdrFee * 0.18); // 18% GST on MDR
+        const netSettled = roundTwoDecimals(grossAmount - mdrFee - gstTax);
+
+        batchGross += grossAmount;
+        batchFee += mdrFee;
+        batchTax += gstTax;
+        batchNet += netSettled;
+
+        if (!isUnrecorded) {
+          const ledgerAmount = isPartial ? grossAmount + 1500 : grossAmount; // deliberate discrepancy if partial
+          ledgerRecords.push({
+            run_id: runId,
+            id: `LED-${orderId}`,
+            order_id: orderId,
+            invoice_ref: orderId,
+            date: txnDate,
+            amount: ledgerAmount,
+            payee: customer,
+            status: 'pending',
+          });
+        }
+
+        batchLineItems.push({
+          run_id: runId,
+          settlement_id: setlId,
+          payment_id: paymentId,
+          order_id: orderId,
+          type: 'payment',
+          amount: grossAmount,
+          fee: mdrFee,
+          tax: gstTax,
+          debit: roundTwoDecimals(mdrFee + gstTax),
+          credit: grossAmount,
+          net_amount: netSettled,
+          currency: 'INR',
+          settled_at: settledDate,
+          unpacked_status: 'pending',
+          variance_category: mdrFee > 0 ? 'mdr_fee' : 'none',
+        });
+      }
+    }
+
+    batchNet = roundTwoDecimals(batchNet);
+    batchGross = roundTwoDecimals(batchGross);
+    batchFee = roundTwoDecimals(batchFee);
+    batchTax = roundTwoDecimals(batchTax);
+    batchRefund = roundTwoDecimals(batchRefund);
+
+    // If this is the imbalanced batch test case, artificially alter batch stated total
+    const statedSettlementAmount = isImbalancedBatch ? roundTwoDecimals(batchNet - 650.0) : batchNet;
+
+    settlementReports.push({
       run_id: runId,
-      date,
-      amount,
+      settlement_id: setlId,
+      amount: statedSettlementAmount,
+      gross_amount: batchGross,
+      fees: batchFee,
+      tax: batchTax,
+      refunds: batchRefund,
+      utr: utrRef,
+      status: 'settled',
+      settled_at: settledDate,
+      item_count: batchLineItems.length,
+      integrity_status: 'pending',
+      bank_record_id: `BNK-SETL-${setlCounter}`,
+    });
+
+    // 1 Bank credit per settlement batch
+    bankRecords.push({
+      run_id: runId,
+      id: `BNK-SETL-${setlCounter}`,
+      date: settledDate,
+      amount: statedSettlementAmount,
       utr_ref: utrRef,
-      narration: `NEFT/${utrRef}/${vendor.prefix}/INV-${refCounter}`,
+      narration: `NEFT CR: HDFC0000060 ${utrRef} RAZORPAY SETTLEMENT ${setlId}`,
       status: 'pending',
-      _meta_category: 'exact'
     });
 
-    ledgerRecords.push({
-      id: `LED-${recId.substring(0, 8)}`,
-      run_id: runId,
-      date,
-      amount,
-      invoice_ref: invoiceRef,
-      payee: vendor.name,
-      status: 'pending',
-      _meta_category: 'exact'
-    });
+    settlementLineItems.push(...batchLineItems);
+    setlCounter++;
   }
 
-  // 2. Timing Lag (+/- 1-3 days) & Minor Narration Discrepancies (~18%)
-  for (let i = 0; i < timingLagCount; i++) {
-    refCounter++;
-    const vendor = randomChoice(VENDORS);
-    const amount = roundTwoDecimals(randomBetween(8000, 250000) + Math.random());
-    const ledgerDate = getRandomDateInPast(35);
-    const dayDelta = randomChoice([-3, -2, -1, 1, 2, 3]);
-    const bankDate = addDays(ledgerDate, dayDelta);
-
-    const utrRef = `UTR-MOCK-${refCounter}`;
-    const invoiceRef = `INV-MOCK-${refCounter}`;
-    const recId = crypto.randomUUID();
-
-    // Minor narration variations (e.g. abbreviation, truncated prefix, UPI format)
-    const narrationStyles = [
-      `IMPS/P2A/${utrRef}/${vendor.prefix.substring(0, 6)}/SETTLEMENT`,
-      `UPI/CR/${utrRef}/${vendor.name.substring(0, 10).toUpperCase()}/PAYMENT`,
-      `ACH-DR/${utrRef}/${vendor.prefix}/BILL-${refCounter}`,
-      `RTGS-OUT/${utrRef}/${vendor.prefix} SERVICES`
-    ];
-
-    bankRecords.push({
-      id: `BNK-${recId.substring(0, 8)}`,
-      run_id: runId,
-      date: bankDate,
-      amount,
-      utr_ref: utrRef,
-      narration: randomChoice(narrationStyles),
-      status: 'pending',
-      _meta_category: 'timing_lag'
-    });
-
-    ledgerRecords.push({
-      id: `LED-${recId.substring(0, 8)}`,
-      run_id: runId,
-      date: ledgerDate,
-      amount,
-      invoice_ref: invoiceRef,
-      payee: vendor.name,
-      status: 'pending',
-      _meta_category: 'timing_lag'
-    });
-  }
-
-  // 3. Duplicate Bank Records (~5% - 2 bank debits for 1 ledger entry)
-  for (let i = 0; i < duplicateCount; i++) {
-    refCounter++;
-    const vendor = randomChoice(VENDORS);
-    const amount = roundTwoDecimals(randomBetween(12000, 85000) + Math.random());
-    const date = getRandomDateInPast(20);
-    const utrRef1 = `UTR-MOCK-${refCounter}`;
-    const utrRef2 = `UTR-MOCK-${refCounter}-DUP`;
-    const invoiceRef = `INV-MOCK-${refCounter}`;
-    const recId1 = crypto.randomUUID();
-    const recId2 = crypto.randomUUID();
-
-    // 1st bank entry (normal)
-    bankRecords.push({
-      id: `BNK-${recId1.substring(0, 8)}`,
-      run_id: runId,
-      date,
-      amount,
-      utr_ref: utrRef1,
-      narration: `NEFT/${utrRef1}/${vendor.prefix}/INV-${refCounter}`,
-      status: 'pending',
-      _meta_category: 'duplicate_orig'
-    });
-
-    // 2nd duplicate bank entry (same day or next day duplicate debit)
-    bankRecords.push({
-      id: `BNK-${recId2.substring(0, 8)}`,
-      run_id: runId,
-      date: addDays(date, randomChoice([0, 1])),
-      amount,
-      utr_ref: utrRef2,
-      narration: `NEFT/${utrRef1}/${vendor.prefix}/INV-${refCounter} RE-POST`,
-      status: 'pending',
-      _meta_category: 'duplicate'
-    });
-
-    // Only 1 ledger record exists
-    ledgerRecords.push({
-      id: `LED-${recId1.substring(0, 8)}`,
-      run_id: runId,
-      date,
-      amount,
-      invoice_ref: invoiceRef,
-      payee: vendor.name,
-      status: 'pending',
-      _meta_category: 'duplicate_target'
-    });
-  }
-
-  // 4. Bank Fees (~5% - bank charges with no ledger counterpart)
-  for (let i = 0; i < bankFeeCount; i++) {
-    refCounter++;
-    const feeAmount = roundTwoDecimals(randomBetween(150, 4500) + [0.0, 0.5, 0.72][randomBetween(0, 2)]);
-    const date = getRandomDateInPast(25);
-    const utrRef = `UTR-MOCK-${refCounter}`;
-    const recId = crypto.randomUUID();
-
-    bankRecords.push({
-      id: `BNK-${recId.substring(0, 8)}`,
-      run_id: runId,
-      date,
-      amount: feeAmount,
-      utr_ref: utrRef,
-      narration: `CHG/${randomChoice(BANK_FEE_DESCRIPTIONS)}/REF-${refCounter}`,
-      status: 'pending',
-      _meta_category: 'bank_fee'
-    });
-    // No ledger record created for bank fee
-  }
-
-  // 5. Refunds & Reversals (~3% - negative/reverse amounts)
-  for (let i = 0; i < refundCount; i++) {
-    refCounter++;
-    const vendor = randomChoice(VENDORS);
-    const amount = roundTwoDecimals(randomBetween(3000, 45000) + Math.random());
-    const date = getRandomDateInPast(20);
-    const utrRef = `UTR-MOCK-${refCounter}`;
-    const invoiceRef = `INV-MOCK-${refCounter}`;
-    const recId = crypto.randomUUID();
-
-    // Bank credit/refund
-    bankRecords.push({
-      id: `BNK-${recId.substring(0, 8)}`,
-      run_id: runId,
-      date,
-      amount: -amount, // Negative / credit reversal
-      utr_ref: utrRef,
-      narration: `REFUND/CR/${utrRef}/${vendor.prefix}/OVERPAYMENT REVERSAL`,
-      status: 'pending',
-      _meta_category: 'refund'
-    });
-
-    ledgerRecords.push({
-      id: `LED-${recId.substring(0, 8)}`,
-      run_id: runId,
-      date: addDays(date, -2),
-      amount: -amount,
-      invoice_ref: invoiceRef,
-      payee: vendor.name,
-      status: 'pending',
-      _meta_category: 'refund'
-    });
-  }
-
-  // 6. Unrecorded Transactions (>= 1 deliberately unrecorded in ledger)
-  for (let i = 0; i < unrecordedCount; i++) {
-    refCounter++;
-    const amount = roundTwoDecimals(randomBetween(25000, 180000) + Math.random());
-    const date = getRandomDateInPast(15);
-    const utrRef = `UTR-MOCK-${refCounter}`;
-    const recId = crypto.randomUUID();
-
-    bankRecords.push({
-      id: `BNK-${recId.substring(0, 8)}`,
-      run_id: runId,
-      date,
-      amount,
-      utr_ref: utrRef,
-      narration: `DIRECT-TRANSFER/MISC-EQUIPMENT-EXPENSE/${utrRef}/UNRECORDED`,
-      status: 'pending',
-      _meta_category: 'unrecorded'
-    });
-    // No ledger record created intentionally!
-  }
-
-  // Shuffle both arrays so order doesn't leak matching structure
-  const shuffle = (array) => array.sort(() => Math.random() - 0.5);
+  // Also add 2 stray bank fee debits to bank statement
+  bankRecords.push({
+    run_id: runId,
+    id: `BNK-FEE-001`,
+    date: new Date('2026-08-15T12:00:00.000Z'),
+    amount: -750.0,
+    utr_ref: 'CHG-CMS-8821',
+    narration: 'CMS MONTHLY MAINTENANCE CHARGES + GST',
+    status: 'pending',
+  });
 
   return {
     runId,
-    bankRecords: shuffle(bankRecords),
-    ledgerRecords: shuffle(ledgerRecords),
-    stats: {
-      totalBankRecords: bankRecords.length,
-      totalLedgerRecords: ledgerRecords.length,
-      exactCount,
-      timingLagCount,
-      duplicateCount,
-      bankFeeCount,
-      refundCount,
-      unrecordedCount,
-    }
+    bankRecords,
+    settlementReports,
+    settlementLineItems,
+    ledgerRecords,
   };
 }
 
 /**
- * Save synthetic dataset to CSV files
+ * Seeds MongoDB database with generated dataset
  */
-export function exportToCSV(dataset, outputDir = path.join(__dirname, '../data/generated')) {
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
-
-  // Bank CSV format
-  const bankData = dataset.bankRecords.map((r) => ({
-    id: r.id,
-    date: new Date(r.date).toISOString().split('T')[0],
-    amount: r.amount,
-    utr_ref: r.utr_ref,
-    narration: r.narration,
-  }));
-
-  // Ledger CSV format
-  const ledgerData = dataset.ledgerRecords.map((r) => ({
-    id: r.id,
-    date: new Date(r.date).toISOString().split('T')[0],
-    amount: r.amount,
-    invoice_ref: r.invoice_ref,
-    payee: r.payee,
-  }));
-
-  const bankCsv = Papa.unparse(bankData);
-  const ledgerCsv = Papa.unparse(ledgerData);
-
-  const bankPath = path.join(outputDir, 'bank_statement_mock.csv');
-  const ledgerPath = path.join(outputDir, 'internal_ledger_mock.csv');
-
-  fs.writeFileSync(bankPath, bankCsv, 'utf8');
-  fs.writeFileSync(ledgerPath, ledgerCsv, 'utf8');
-
-  console.log(`\n[CSV Export Success]`);
-  console.log(`- Bank CSV:   ${bankPath} (${bankData.length} records)`);
-  console.log(`- Ledger CSV: ${ledgerPath} (${ledgerData.length} records)`);
-
-  return { bankPath, ledgerPath };
-}
-
-/**
- * Save synthetic dataset directly to MongoDB
- */
-export async function seedToMongoDB(dataset) {
-  console.log(`\n[MongoDB Seeding] Connecting to database...`);
+export async function seedDatabase() {
   await connectDB();
+  const runId = `RUN-SEED-${Date.now().toString(36)}`;
 
-  try {
-    const { runId, bankRecords, ledgerRecords, stats } = dataset;
+  console.log('Clearing existing database collections...');
+  await Run.deleteMany({});
+  await BankRecord.deleteMany({});
+  await LedgerRecord.deleteMany({});
+  await SettlementReport.deleteMany({});
+  await SettlementLineItem.deleteMany({});
+  await Match.deleteMany({});
+  await Exception.deleteMany({});
+  await DraftAction.deleteMany({});
 
-    console.log(`[MongoDB] Creating Run ${runId}...`);
-    await Run.findOneAndUpdate(
-      { run_id: runId },
-      {
-        run_id: runId,
-        status: 'pending',
-        total_records: bankRecords.length,
-        pass1_matched: 0,
-        pass2_matched: 0,
-        pass3_matched: 0,
-        unresolved: 0,
-        match_rate: 0.0,
-        created_at: new Date(),
-        completed_at: null,
-      },
-      { upsert: true, new: true }
-    );
+  const data = await generateRazorpaySeedData(runId);
 
-    console.log(`[MongoDB] Inserting ${bankRecords.length} bank records...`);
-    const cleanBank = bankRecords.map(({ _meta_category, ...rec }) => rec);
-    await BankRecord.insertMany(cleanBank);
+  console.log(`Inserting ${data.bankRecords.length} Bank Records (Settlement Credits)...`);
+  await BankRecord.insertMany(data.bankRecords);
 
-    console.log(`[MongoDB] Inserting ${ledgerRecords.length} ledger records...`);
-    const cleanLedger = ledgerRecords.map(({ _meta_category, ...rec }) => rec);
-    await LedgerRecord.insertMany(cleanLedger);
+  console.log(`Inserting ${data.settlementReports.length} Razorpay Settlement Reports...`);
+  await SettlementReport.insertMany(data.settlementReports);
 
-    // Ensure default demo analyst user exists
-    const demoEmail = 'analyst@reconcile.ai';
-    const existingUser = await User.findOne({ email: demoEmail });
-    if (!existingUser) {
-      console.log(`[MongoDB] Creating default demo user (${demoEmail})...`);
-      const demoUser = new User({
-        email: demoEmail,
-        password: 'password123', // Will be hashed by pre-save hook
-        role: 'analyst',
-      });
-      await demoUser.save();
-      console.log(`[MongoDB] Demo user created successfully.`);
-    }
+  console.log(`Inserting ${data.settlementLineItems.length} Settlement Line Items (Unpacked Orders)...`);
+  await SettlementLineItem.insertMany(data.settlementLineItems);
 
-    console.log(`\n======================================================`);
-    console.log(`  RECONCILE.AI SYNTHETIC SEED COMPLETED`);
-    console.log(`======================================================`);
-    console.log(`  Run ID:                ${runId}`);
-    console.log(`  Bank Records:          ${bankRecords.length}`);
-    console.log(`  Ledger Records:        ${ledgerRecords.length}`);
-    console.log(`  ----------------------------------------------------`);
-    console.log(`  - Exact Match Target:  ~${stats.exactCount} records (${Math.round((stats.exactCount/totalCount)*100)}%)`);
-    console.log(`  - Timing Lag Target:   ~${stats.timingLagCount} records`);
-    console.log(`  - Duplicate Bank Debits: ~${stats.duplicateCount} records`);
-    console.log(`  - Bank Fees (No Ledger): ~${stats.bankFeeCount} records`);
-    console.log(`  - Refunds & Reversals: ~${stats.refundCount} records`);
-    console.log(`  - Unrecorded Txns:     ~${stats.unrecordedCount} records`);
-    console.log(`======================================================\n`);
+  console.log(`Inserting ${data.ledgerRecords.length} Internal Ledger Orders...`);
+  await LedgerRecord.insertMany(data.ledgerRecords);
 
-    return { runId, stats };
-  } finally {
-    await disconnectDB();
-  }
+  const initialRun = await Run.create({
+    run_id: runId,
+    total_records: data.settlementLineItems.length,
+    status: 'ready',
+    pass1_matched: 0,
+    pass2_matched: 0,
+    pass3_matched: 0,
+    unresolved: data.settlementLineItems.length,
+    match_rate: 0.0,
+  });
+
+  console.log(`\n✅ Database seeded successfully with Run ID: ${runId}`);
+  console.log(`- Bank Settlement Credits: ${data.bankRecords.length}`);
+  console.log(`- Razorpay Settlement Batches: ${data.settlementReports.length}`);
+  console.log(`- Granular Order Line Items: ${data.settlementLineItems.length}`);
+  console.log(`- Internal Ledger Orders: ${data.ledgerRecords.length}`);
+
+  // Write CSV exports for reference
+  const dataDir = path.join(__dirname, '../data');
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+  fs.writeFileSync(
+    path.join(dataDir, 'bank_statements.csv'),
+    Papa.unparse(data.bankRecords)
+  );
+  fs.writeFileSync(
+    path.join(dataDir, 'razorpay_settlements.csv'),
+    Papa.unparse(data.settlementReports)
+  );
+  fs.writeFileSync(
+    path.join(dataDir, 'settlement_line_items.csv'),
+    Papa.unparse(data.settlementLineItems)
+  );
+  fs.writeFileSync(
+    path.join(dataDir, 'ledger_orders.csv'),
+    Papa.unparse(data.ledgerRecords)
+  );
+
+  await disconnectDB();
+  return { runId, data };
 }
 
-// CLI Execution Handler
-function getRecordCount() {
-  const countArg = process.argv.find((arg) => arg.startsWith('--count='));
-  if (countArg) {
-    const val = parseInt(countArg.split('=')[1], 10);
-    if (!isNaN(val) && val > 0) return val;
-  }
-  const nIndex = process.argv.indexOf('-n');
-  if (nIndex !== -1 && process.argv[nIndex + 1]) {
-    const val = parseInt(process.argv[nIndex + 1], 10);
-    if (!isNaN(val) && val > 0) return val;
-  }
-  return 500;
-}
-
-const isDirectExecution =
-  process.argv[1] &&
-  (process.argv[1].endsWith('generateSeed.js') || process.argv[1].endsWith('generateSeed'));
-
-if (isDirectExecution) {
-  const totalCount = getRecordCount();
-  const isCsvMode = process.argv.includes('--csv');
-  const isMongoMode = process.argv.includes('--mongo') || (!isCsvMode && !process.argv.includes('--help'));
-
-  if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log(`
-ReconcileAI Synthetic Seed Generator CLI
-Usage:
-  node generateSeed.js [options]
-
-Options:
-  --count=<N>, -n <N>    Number of base paired records to generate (default: 500)
-  --mongo                Seed directly to MongoDB database (default)
-  --csv                  Export paired records to CSV files in server/data/generated/
-  --help, -h             Show this help message
-
-Examples:
-  node generateSeed.js --count=500 --mongo
-  node generateSeed.js --count=1000 --csv
-  npm run seed
-    `);
-    process.exit(0);
-  }
-
-  // Execute CLI
-  const dataset = generateSyntheticDataset(totalCount);
-
-  if (isCsvMode) {
-    exportToCSV(dataset);
-  }
-
-  if (isMongoMode) {
-    seedToMongoDB(dataset).catch((err) => {
-      console.error('[CLI Seed Error]:', err);
+// If executed directly
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  seedDatabase()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error('Seed Error:', err);
       process.exit(1);
     });
-  }
 }
-

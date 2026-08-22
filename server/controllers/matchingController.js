@@ -195,3 +195,64 @@ export async function listRuns(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Controller: Lists all Razorpay settlement batches for a run
+ * GET /api/runs/:run_id/settlements
+ */
+export async function listRunSettlements(req, res, next) {
+  try {
+    const { run_id } = req.params;
+    const SettlementReport = (await import('../models/SettlementReport.js')).default;
+    const settlements = await SettlementReport.find({ run_id }).sort({ settled_at: -1 }).lean();
+
+    return res.status(200).json({
+      success: true,
+      count: settlements.length,
+      data: settlements,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Controller: Retrieves full reconciliation worksheet for a specific settlement batch
+ * GET /api/runs/:run_id/settlements/:settlement_id
+ */
+export async function getRunSettlementDetail(req, res, next) {
+  try {
+    const { run_id, settlement_id } = req.params;
+    const SettlementReport = (await import('../models/SettlementReport.js')).default;
+    const SettlementLineItem = (await import('../models/SettlementLineItem.js')).default;
+    const BankRecord = (await import('../models/BankRecord.js')).default;
+
+    const settlement = await SettlementReport.findOne({ run_id, settlement_id }).lean();
+    if (!settlement) {
+      return res.status(404).json({
+        error: {
+          code: 'SETTLEMENT_NOT_FOUND',
+          message: `Settlement "${settlement_id}" not found for run "${run_id}"`,
+        },
+      });
+    }
+
+    const lineItems = await SettlementLineItem.find({ run_id, settlement_id }).lean();
+    const bankRecord = settlement.bank_record_id
+      ? await BankRecord.findOne({ run_id, id: settlement.bank_record_id }).lean()
+      : null;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        settlement,
+        bankRecord,
+        line_items_count: lineItems.length,
+        line_items: lineItems,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

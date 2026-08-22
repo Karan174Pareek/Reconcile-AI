@@ -10,6 +10,8 @@ import {
   reconcileAllHandler,
   getRunDetails,
   listRuns,
+  listRunSettlements,
+  getRunSettlementDetail,
 } from '../controllers/matchingController.js';
 import { getRunExceptions } from '../controllers/exceptionController.js';
 import { getRunDraftActions } from '../controllers/draftActionController.js';
@@ -21,6 +23,8 @@ const router = express.Router();
 // Run management & querying
 router.get('/', listRuns);
 router.get('/:run_id', getRunDetails);
+router.get('/:run_id/settlements', listRunSettlements);
+router.get('/:run_id/settlements/:settlement_id', getRunSettlementDetail);
 router.get('/:run_id/exceptions', getRunExceptions);
 router.get('/:run_id/draft-actions', getRunDraftActions);
 router.get('/:run_id/audit-log', getRunAuditLogs);
