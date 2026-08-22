@@ -4,9 +4,7 @@ An intelligent AI Finance Controller that solves the **N-to-1 Razorpay Settlemen
 
 Built for the **Razorpay AI Buildathon 2026** (*Finance Controller Track*).
 
-🎥 **Demo Video Recording**: [**`docs/demo-recording.webm`**](./docs/demo-recording.webm)  
-🎬 **5-Minute Pitch Script**: [**`DEMO_SCRIPT.md`**](./DEMO_SCRIPT.md)  
-📚 **System Architecture & PRD**: [**`docs/prd.md`**](./docs/prd.md) • [**`docs/overview.md`**](./docs/overview.md) • [**`docs/database.md`**](./docs/database.md)
+📚 **System Documentation**: [**`docs/prd.md`**](./docs/prd.md) • [**`docs/overview.md`**](./docs/overview.md) • [**`docs/architecture.md`**](./docs/architecture.md) • [**`docs/database.md`**](./docs/database.md)
 
 ---
 
@@ -24,24 +22,44 @@ A standard 2-way bank-to-ledger matcher fails completely because no single order
 
 ---
 
-## The 3-Level Solution
+## 🏗️ System Architecture
 
-ReconcileAI automates this entire reconciliation hierarchy in milliseconds:
+```mermaid
+flowchart TD
+    subgraph INGESTION ["1. Ingestion & Validation"]
+        A[Bank Statement CSV] -->|Multer & Zod| V1[Bank Ingestion]
+        B[Razorpay Settlement CSV] -->|PapaParse & Zod| V2[Settlement Ingestion]
+        C[Internal ERP Orders] -->|Zod Validation| V3[Ledger Ingestion]
+    end
 
+    subgraph ENGINE ["2. 3-Level Settlement Unpacking Engine"]
+        V1 & V2 --> L0[Level 0: Bank Credit ↔ Settlement Match<br/>UTR + Net Amount + T+2 Window]
+        L0 --> L1{Level 1: Batch Integrity Gate<br/>Σ Line Items == Bank Credit?}
+        L1 -->|Imbalanced| EX1[Flag 'batch_imbalance' Exception<br/>Halt Unpacking of Batch]
+        L1 -->|Balanced| L2[Level 2: Order-Level Unpacking<br/>Gross - 2% MDR - 18% GST = Net]
+        L2 & V3 --> MAT[Level 2 Order Matches & Variances]
+    end
+
+    subgraph REASONING ["3. Claude 3.5 Sonnet Pass 3"]
+        MAT & EX1 --> P3[Settlement Variance Reasoner<br/>Pass 3 Bounded Batching]
+        P3 --> HITL[Draft Actions Generation<br/>Vendor Emails & Journal Entries]
+    end
+
+    subgraph INTERFACE ["4. User Interface & Forensic Audit"]
+        MAT --> DASH[Real-Time Dashboard & Stepper]
+        EX1 --> EXQ[Exception Queue Grouped by Batch]
+        HITL --> DRAFT[HITL Approval Workflow]
+        DASH --> MODAL[Settlement Worksheet Modal]
+        AGENT[Conversational Forensic Auditor] -->|Read-Only Tools| DB[(Immutable MongoDB)]
+    end
 ```
-Level 0: Bank Credit ↔ Settlement Batch Match
-         (Correlates bank credit to Razorpay setl_... batch header via UTR + Net Amount)
-                              │
-                              ▼
-Level 1: Settlement Batch Explosion & Integrity Check
-         (Cryptographic Gate: Verifies Σ line item net amounts == Bank Credit within ₹0.05)
-         [If Balanced] ──► Proceed to Level 2
-         [If Imbalanced] ──► Flag 'batch_imbalance' Exception & Halt Unpacking
-                              │
-                              ▼
-Level 2: Line-Item ↔ Internal Order Match & ITC Claim
-         (Unpacks 500+ orders, separates 2% MDR & 18% GST ITC, diagnoses variances)
-```
+
+### Architectural Highlights & Security Guarantees
+1. **Mathematical Batch Integrity Gate (Level 1)**: Cryptographically verifies $\sum \text{Line Items} == \text{Bank Credit}$ within $\pm ₹0.05$. If Razorpay's statement does not balance, the engine immediately flags a `batch_imbalance` and halts unpacking, preventing silent error propagation.
+2. **Deterministic Tax & Gateway Unpacking (Level 2)**: Separates gross customer payment, isolates 2.0% MDR, and computes claimable 18% GST Input Tax Credit (ITC).
+3. **Read-Only Forensic Agent Tools**: Claude Agent queries the database exclusively via scoped, parameter-validated read tools (`query_settlements`, `get_settlement_detail`, `query_matches`, `query_exceptions`, `query_audit_log`).
+4. **Immutable Audit Trail**: Append-only MongoDB collection with schema-level mutation blocks preventing `updateOne`, `updateMany`, `deleteOne`, and `deleteMany`.
+5. **Zero Silent Side-Effects (HITL)**: Email drafts and journal adjustment entries require explicit human approval before execution.
 
 ---
 
@@ -93,7 +111,7 @@ On a live 500-record enterprise dataset:
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## 🛠️ Tech Stack & Implementation
 
 - **Backend**: Node.js (ES Modules), Express, Mongoose, Socket.io, PapaParse, Zod.
 - **AI / LLM**: Anthropic Claude 3.5 Sonnet (`@anthropic-ai/sdk`), structured JSON schema output with single-repair retry loop.
