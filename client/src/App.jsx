@@ -85,6 +85,7 @@ export default function App() {
       {/* Ambient Asymmetric Glow Accents */}
       <div className="ambient-glow-teal" />
       <div className="ambient-glow-amber" />
+      <div className="ambient-glow-bottom" />
 
       {/* Top Navbar */}
       <Navbar

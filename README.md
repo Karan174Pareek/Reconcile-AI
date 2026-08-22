@@ -64,6 +64,13 @@ ReconcileAI automates this process end to end. Given a bank statement and a ledg
 
 ---
 
+### 🎥 End-to-End Demo Video
+*A full, unhurried 5-minute walkthrough of the 3-pass pipeline, conversational forensic chat, and human-in-the-loop remediation approval.*
+
+📹 [**Watch High-Resolution Demo Recording (`docs/demo-recording.webm`)**](./docs/demo-recording.webm)
+
+---
+
 ## Results
 
 Tested against a 525-transaction synthetic dataset modeled on realistic business patterns:

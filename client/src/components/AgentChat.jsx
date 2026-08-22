@@ -44,6 +44,16 @@ export default function AgentChat({ runId, isOpen, onClose }) {
     scrollToBottom();
   }, [messages, isStreaming]);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const handleSendMessage = async (textToSend) => {
     const text = textToSend || inputValue;
     if (!text.trim() || isStreaming || !runId) return;
@@ -178,7 +188,7 @@ export default function AgentChat({ runId, isOpen, onClose }) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
+        <div className="fixed inset-0 z-[100] overflow-hidden">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
