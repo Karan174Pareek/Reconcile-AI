@@ -3,6 +3,9 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Disable buffering so unhandled Mongo connection attempts fail fast (0ms) instead of hanging 10,000ms
+mongoose.set('bufferCommands', false);
+
 let cachedConn = null;
 let cachedPromise = null;
 
@@ -26,8 +29,9 @@ export const connectDB = async (customUri) => {
   if (!cachedPromise) {
     cachedPromise = mongoose
       .connect(uri, {
-        serverSelectionTimeoutMS: 8000,
-        connectTimeoutMS: 8000,
+        serverSelectionTimeoutMS: 2500,
+        connectTimeoutMS: 2500,
+        bufferCommands: false,
       })
       .then((conn) => {
         cachedConn = conn;
@@ -36,7 +40,7 @@ export const connectDB = async (customUri) => {
       })
       .catch((error) => {
         cachedPromise = null;
-        console.error(`[MongoDB] Connection Error: ${error.message}`);
+        console.warn(`[MongoDB] Connection Warning (Fast Fail): ${error.message}`);
         throw error;
       });
   }
