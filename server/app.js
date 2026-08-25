@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { connectDB } from './config/db.js';
 
 dotenv.config();
 
@@ -37,6 +38,25 @@ app.use(
 app.options('*', cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Database connection assurance middleware for serverless invocations
+app.use(async (req, res, next) => {
+  try {
+    if (req.path.startsWith('/api') || req.path.startsWith('/runs') || req.path.startsWith('/exceptions') || req.path.startsWith('/draft-actions') || req.path.startsWith('/audit-logs') || req.path.startsWith('/auth')) {
+      await connectDB();
+    }
+    next();
+  } catch (err) {
+    console.error('[DB Middleware Connection Error]:', err.message);
+    return res.status(500).json({
+      error: {
+        code: 'DATABASE_CONNECTION_ERROR',
+        message: err.message || 'Failed to establish database connection with MongoDB Atlas',
+        details: null,
+      },
+    });
+  }
+});
 
 import runsRouter from './routes/runs.js';
 import exceptionsRouter from './routes/exceptions.js';
