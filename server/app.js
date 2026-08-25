@@ -6,10 +6,31 @@ dotenv.config();
 
 const app = express();
 
+function sanitizeOrigin(url) {
+  if (!url || typeof url !== 'string') return 'http://localhost:5173';
+  return url.replace(/^['"\s]+|['"\s]+$/g, '').replace(/\/+$/, '');
+}
+
+const configuredClientUrl = sanitizeOrigin(process.env.CLIENT_URL);
+
+const corsOriginHandler = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  const cleanOrigin = sanitizeOrigin(origin);
+  if (
+    cleanOrigin === configuredClientUrl ||
+    cleanOrigin.endsWith('.vercel.app') ||
+    cleanOrigin.includes('localhost') ||
+    cleanOrigin.includes('127.0.0.1')
+  ) {
+    return callback(null, cleanOrigin);
+  }
+  return callback(null, cleanOrigin);
+};
+
 // Middleware
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: corsOriginHandler,
     credentials: true,
   })
 );
