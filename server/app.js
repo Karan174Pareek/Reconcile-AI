@@ -43,6 +43,24 @@ import draftActionsRouter from './routes/draftActions.js';
 import auditLogsRouter from './routes/auditLogs.js';
 import authRouter from './routes/auth.js';
 
+// Root API welcome endpoint
+app.get('/', (req, res) => {
+  res.json({
+    service: 'ReconcileAI Reconciliation Backend Engine',
+    version: '2.0.0',
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    api: {
+      health: '/api/health',
+      runs: '/api/runs',
+      exceptions: '/api/exceptions',
+      draft_actions: '/api/draft-actions',
+      audit_logs: '/api/audit-logs',
+      auth: '/api/auth',
+    },
+  });
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
