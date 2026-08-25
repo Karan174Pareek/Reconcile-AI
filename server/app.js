@@ -34,6 +34,7 @@ app.use(
     credentials: true,
   })
 );
+app.options('*', cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -62,7 +63,7 @@ app.get('/', (req, res) => {
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get(['/health', '/api/health'], (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -70,12 +71,21 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API Routes
+// API Routes (mounted on both /api/* and /* for universal serverless compatibility)
 app.use('/api/auth', authRouter);
+app.use('/auth', authRouter);
+
 app.use('/api/runs', runsRouter);
+app.use('/runs', runsRouter);
+
 app.use('/api/exceptions', exceptionsRouter);
+app.use('/exceptions', exceptionsRouter);
+
 app.use('/api/draft-actions', draftActionsRouter);
+app.use('/draft-actions', draftActionsRouter);
+
 app.use('/api/audit-logs', auditLogsRouter);
+app.use('/audit-logs', auditLogsRouter);
 
 // Standard 404 handler
 app.use((req, res, next) => {
