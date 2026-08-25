@@ -164,6 +164,18 @@ export async function approveDraftAction(req, res, next) {
       }
     }
 
+    // Persist updated draft in MemoryStore for high-availability idempotency
+    if (draft.run_id) {
+      const list = MemoryStore.getDraftActions(draft.run_id);
+      const existingIdx = list.findIndex((d) => d._id === id || d.id === id || d.exception_id === id);
+      if (existingIdx >= 0) {
+        list[existingIdx] = draft;
+      } else {
+        list.push(draft);
+      }
+      MemoryStore.saveDraftActions(draft.run_id, list);
+    }
+
     // Audit Logging
     if (draft.run_id) {
       const auditEntry = {
