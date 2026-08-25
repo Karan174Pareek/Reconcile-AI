@@ -336,6 +336,22 @@ export async function executePass3(runId, options = {}) {
       batches.push(batchItems);
     }
 
+    let anthropicDisabledDueToQuota = false;
+
+    const batchEvaluations = await Promise.all(
+      batches.map(async (batch) => {
+        if (anthropicDisabledDueToQuota || !client) {
+          return generateFallbackPass3Evaluations(batch);
+        }
+        try {
+          return await executePass3BatchCall(client, batch, options);
+        } catch (e) {
+          anthropicDisabledDueToQuota = true;
+          return generateFallbackPass3Evaluations(batch);
+        }
+      })
+    );
+
     let pass3MatchesCount = 0;
     const newMatches = [];
     const newExceptions = [];
@@ -343,8 +359,9 @@ export async function executePass3(runId, options = {}) {
     const matchedLedgerIds = [];
     const draftActionsToCreate = [];
 
-    for (const batch of batches) {
-      const evaluations = await executePass3BatchCall(client, batch, options);
+    for (let bIdx = 0; bIdx < batches.length; bIdx++) {
+      const batch = batches[bIdx];
+      const evaluations = batchEvaluations[bIdx] || [];
 
       for (const evalItem of evaluations) {
         const itemObj = batch.find(
