@@ -672,28 +672,25 @@ export async function executeRun(runId, options = {}) {
     const allMatches = [...l0.matches, ...l1.matches, ...l2.matches];
     const allExceptions = [...l0.exceptions, ...l1.exceptions, ...l2.exceptions];
 
-    if (allMatches.length > 0) {
-      await Match.insertMany(allMatches, { ordered: false });
-    }
-    if (allExceptions.length > 0) {
-      await Exception.insertMany(allExceptions, { ordered: false });
-    }
-
-    for (const bId of l0.matchedBankIds) {
-      await BankRecord.updateOne({ run_id: runId, id: bId }, { $set: { status: 'matched' } });
-    }
-    for (const sId of l1.balancedSettlementIds) {
-      await SettlementReport.updateOne({ run_id: runId, settlement_id: sId }, { $set: { integrity_status: 'balanced' } });
-    }
-    for (const sId of l1.imbalancedSettlementIds) {
-      await SettlementReport.updateOne({ run_id: runId, settlement_id: sId }, { $set: { integrity_status: 'imbalanced' } });
-    }
-    for (const pId of l2.matchedLineItemIds) {
-      await SettlementLineItem.updateOne({ run_id: runId, payment_id: pId }, { $set: { unpacked_status: 'matched' } });
-    }
-    for (const lId of l2.matchedLedgerIds) {
-      await LedgerRecord.updateOne({ run_id: runId, id: lId }, { $set: { status: 'matched' } });
-    }
+    await Promise.all([
+      allMatches.length > 0 ? Match.insertMany(allMatches, { ordered: false }) : Promise.resolve(),
+      allExceptions.length > 0 ? Exception.insertMany(allExceptions, { ordered: false }) : Promise.resolve(),
+      l0.matchedBankIds.length > 0
+        ? BankRecord.updateMany({ run_id: runId, id: { $in: l0.matchedBankIds } }, { $set: { status: 'matched' } })
+        : Promise.resolve(),
+      l1.balancedSettlementIds.length > 0
+        ? SettlementReport.updateMany({ run_id: runId, settlement_id: { $in: l1.balancedSettlementIds } }, { $set: { integrity_status: 'balanced' } })
+        : Promise.resolve(),
+      l1.imbalancedSettlementIds.length > 0
+        ? SettlementReport.updateMany({ run_id: runId, settlement_id: { $in: l1.imbalancedSettlementIds } }, { $set: { integrity_status: 'imbalanced' } })
+        : Promise.resolve(),
+      l2.matchedLineItemIds.length > 0
+        ? SettlementLineItem.updateMany({ run_id: runId, payment_id: { $in: l2.matchedLineItemIds } }, { $set: { unpacked_status: 'matched' } })
+        : Promise.resolve(),
+      l2.matchedLedgerIds.length > 0
+        ? LedgerRecord.updateMany({ run_id: runId, id: { $in: l2.matchedLedgerIds } }, { $set: { status: 'matched' } })
+        : Promise.resolve(),
+    ]);
 
     const totalRecords = settlementLineItems.length;
     const level2Matched = l2.matches.length;

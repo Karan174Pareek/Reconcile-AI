@@ -198,27 +198,28 @@ export async function generateSeedRun(req, res, next) {
 
     const data = await generateRazorpaySeedData(runId);
 
-    await Run.findOneAndUpdate(
-      { run_id: runId },
-      {
-        run_id: runId,
-        status: 'pending',
-        total_records: data.settlementLineItems.length,
-        pass1_matched: 0,
-        pass2_matched: 0,
-        pass3_matched: 0,
-        unresolved: data.settlementLineItems.length,
-        match_rate: 0.0,
-        created_at: new Date(),
-        completed_at: null,
-      },
-      { upsert: true, new: true }
-    );
-
-    if (data.bankRecords?.length) await BankRecord.insertMany(data.bankRecords, { ordered: false });
-    if (data.ledgerRecords?.length) await LedgerRecord.insertMany(data.ledgerRecords, { ordered: false });
-    if (data.settlementReports?.length) await SettlementReport.insertMany(data.settlementReports, { ordered: false });
-    if (data.settlementLineItems?.length) await SettlementLineItem.insertMany(data.settlementLineItems, { ordered: false });
+    await Promise.all([
+      Run.findOneAndUpdate(
+        { run_id: runId },
+        {
+          run_id: runId,
+          status: 'pending',
+          total_records: data.settlementLineItems.length,
+          pass1_matched: 0,
+          pass2_matched: 0,
+          pass3_matched: 0,
+          unresolved: data.settlementLineItems.length,
+          match_rate: 0.0,
+          created_at: new Date(),
+          completed_at: null,
+        },
+        { upsert: true, new: true }
+      ),
+      data.bankRecords?.length ? BankRecord.insertMany(data.bankRecords, { ordered: false }) : Promise.resolve(),
+      data.ledgerRecords?.length ? LedgerRecord.insertMany(data.ledgerRecords, { ordered: false }) : Promise.resolve(),
+      data.settlementReports?.length ? SettlementReport.insertMany(data.settlementReports, { ordered: false }) : Promise.resolve(),
+      data.settlementLineItems?.length ? SettlementLineItem.insertMany(data.settlementLineItems, { ordered: false }) : Promise.resolve(),
+    ]);
 
     return res.status(201).json({
       success: true,
