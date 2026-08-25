@@ -198,9 +198,12 @@ export async function generateSeedRun(req, res, next) {
           data.settlementReports?.length ? SettlementReport.insertMany(data.settlementReports, { ordered: false }) : Promise.resolve(),
           data.settlementLineItems?.length ? SettlementLineItem.insertMany(data.settlementLineItems, { ordered: false }) : Promise.resolve(),
         ]);
+        console.log(`[DB Write: MONGODB_PRIMARY] Seed Run ${runId}: 500+ records written directly to MongoDB Atlas.`);
+      } else {
+        console.warn(`[DB Write: MEMORY_STORE_ONLY] MongoDB not ready (readyState: ${mongoose.connection.readyState}). Run ${runId} stored in MemoryStore.`);
       }
     } catch (mongoErr) {
-      console.warn('[Mongo Ingestion Warning - Memory Fallback Active]:', mongoErr.message);
+      console.warn('[DB Write: MONGODB_SAVE_FAILED]:', mongoErr.message);
     }
 
     return res.status(201).json({

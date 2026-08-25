@@ -113,6 +113,11 @@ export async function executePass3BatchCall(client, batchItems, options = {}) {
     lastError = err;
     console.warn('[Pass 3] Attempt 1 failed:', err.message);
 
+    if (err.message?.includes('429') || err.message?.includes('rate_limit')) {
+      console.warn('[Pass 3] Rate limit reached. Backing off for 1500ms...');
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+
     // If quota or credit limit error, immediately fallback to deterministic evaluations
     if (
       err.message?.includes('credit balance') ||
@@ -146,6 +151,26 @@ export async function executePass3BatchCall(client, batchItems, options = {}) {
     console.error('[Pass 3] Attempt 2 failed:', retryErr.message);
     return generateFallbackPass3Evaluations(batchItems);
   }
+}
+
+/**
+ * Executes an array of items with a fixed concurrency limit
+ */
+async function mapConcurrent(items, limit, fn) {
+  const results = [];
+  const executing = [];
+  for (const item of items) {
+    const p = Promise.resolve().then(() => fn(item));
+    results.push(p);
+    if (limit <= items.length) {
+      const e = p.then(() => executing.splice(executing.indexOf(e), 1));
+      executing.push(e);
+      if (executing.length >= limit) {
+        await Promise.race(executing);
+      }
+    }
+  }
+  return Promise.all(results);
 }
 
 /**
@@ -378,19 +403,17 @@ export async function executePass3(runId, options = {}) {
 
     let anthropicDisabledDueToQuota = false;
 
-    const batchEvaluations = await Promise.all(
-      batches.map(async (batch) => {
-        if (anthropicDisabledDueToQuota || !client) {
-          return generateFallbackPass3Evaluations(batch);
-        }
-        try {
-          return await executePass3BatchCall(client, batch, options);
-        } catch (e) {
-          anthropicDisabledDueToQuota = true;
-          return generateFallbackPass3Evaluations(batch);
-        }
-      })
-    );
+    const batchEvaluations = await mapConcurrent(batches, 2, async (batch) => {
+      if (anthropicDisabledDueToQuota || !client) {
+        return generateFallbackPass3Evaluations(batch);
+      }
+      try {
+        return await executePass3BatchCall(client, batch, options);
+      } catch (e) {
+        anthropicDisabledDueToQuota = true;
+        return generateFallbackPass3Evaluations(batch);
+      }
+    });
 
     let pass3MatchesCount = 0;
     const newMatches = [];

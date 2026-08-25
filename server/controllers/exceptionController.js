@@ -207,12 +207,15 @@ export async function resolveException(req, res, next) {
       }
     }
 
-    if (typeof exception.save === 'function') {
+    if (typeof exception.save === 'function' && mongoose.connection.readyState === 1) {
       try {
         await exception.save();
+        console.log(`[DB Write: MONGODB_PRIMARY] Exception ${id} resolved to ${decision} by ${actor} in MongoDB Atlas.`);
       } catch (e) {
-        console.warn('[Mongo Save Exception Warning]:', e.message);
+        console.warn('[DB Write: MONGODB_SAVE_FAILED]:', e.message);
       }
+    } else {
+      console.warn(`[DB Write: MEMORY_STORE_ONLY] Exception ${id} resolved to ${decision} in MemoryStore.`);
     }
 
     // Update Run summary statistics

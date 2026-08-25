@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build --prefix client",
+  "buildCommand": "node scripts/syncServer.js && npm run build --prefix client",
   "outputDirectory": "client/dist",
   "functions": {
     "api/index.js": {

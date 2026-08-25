@@ -17,8 +17,8 @@
     "seed:csv": "node server/scripts/generateSeed.js --csv",
     "seed:mongo": "node server/scripts/generateSeed.js --mongo",
     "start": "npm run start --prefix server",
-    "build": "npm run build --prefix client",
-    "build:client": "npm run build --prefix client"
+    "build": "node scripts/syncServer.js && npm run build --prefix client",
+    "build:client": "node scripts/syncServer.js && npm run build --prefix client"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
