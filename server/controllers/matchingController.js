@@ -1,7 +1,9 @@
+import mongoose from 'mongoose';
 import { executeRun } from '../services/matchingEngine.js';
 import Run from '../models/Run.js';
 import Match from '../models/Match.js';
 import Exception from '../models/Exception.js';
+import { MemoryStore } from '../services/memoryStore.js';
 
 /**
  * Controller: Executes Pass 1 and Pass 2 reconciliation for a given run_id
@@ -33,21 +35,14 @@ export async function executeRunHandler(req, res, next) {
   }
 }
 
-import {
-  emitRunProgress,
-  emitPassComplete,
-  emitRunComplete,
-  emitRunError,
-} from '../sockets/runSocket.js';
-
 /**
- * Controller: Executes full 3-pass reconciliation pipeline (Pass 1 -> Pass 2 -> Pass 3)
- * with real-time Socket.io progress streaming
+ * Controller: Executes the full autonomous pipeline (Pass 1 + Pass 2 + Pass 3 Claude)
  * POST /api/runs/:run_id/reconcile-all
  */
 export async function reconcileAllHandler(req, res, next) {
-  const { run_id } = req.params;
   try {
+    const { run_id } = req.params;
+
     if (!run_id) {
       return res.status(400).json({
         error: {
@@ -58,69 +53,59 @@ export async function reconcileAllHandler(req, res, next) {
       });
     }
 
-    // 1. Stage 1: Deterministic Matching (3-level settlement engine / Pass 1 & 2)
-    emitRunProgress(run_id, {
-      stage: 'deterministic_start',
-      pass: 1,
-      percentage: 10,
-      message: 'Starting deterministic reconciliation engine...',
-    });
+    // Step 1: Execute Pass 1 and Pass 2 deterministic rules
+    const p12Result = await executeRun(run_id);
 
-    const pass1And2Result = await executeRun(run_id);
+    // Step 2: Execute Pass 3 Claude reasoning for remaining exceptions
+    let p3Result = null;
+    let p3Error = null;
 
-    const detStats = pass1And2Result.stats || {};
-    const detMessage =
-      pass1And2Result.mode === 'settlement'
-        ? `3-level engine complete: Level 0 matched ${detStats.level0_matched}/${detStats.level0_total} credits, Level 1 ${detStats.level1_balanced} balanced (${detStats.level1_flagged} flagged), Level 2 unpacked ${detStats.level2_matched}/${detStats.total_records} orders.`
-        : `Pass 1 & 2 complete: ${detStats.pass1_matched} exact, ${detStats.pass2_matched} fuzzy matches.`;
+    try {
+      const { executePass3 } = await import('../services/claudeOrchestrator.js');
+      p3Result = await executePass3(run_id);
+    } catch (err) {
+      p3Error = err.message;
+      console.warn(`[Pass 3 Warning for run ${run_id}]:`, err.message);
+    }
 
-    emitPassComplete(run_id, {
-      pass: 2,
-      percentage: 60,
-      stats: detStats,
-      message: detMessage,
-    });
+    // Retrieve fresh run summary with memory fallback
+    let updatedRun = null;
+    try {
+      if (mongoose.connection.readyState === 1) {
+        updatedRun = await Run.findOne({ run_id }).lean();
+      }
+    } catch (e) {
+      console.warn('[Mongo Fetch Warning]:', e.message);
+    }
 
-    // 2. Stage 2: Claude AI Exception Reasoning (Pass 3)
-    emitRunProgress(run_id, {
-      stage: 'pass3_ai',
-      pass: 3,
-      percentage: 75,
-      message: 'Initiating Pass 3 Claude AI Exception Reasoning & Draft Actions...',
-    });
-
-    const { executePass3 } = await import('../services/claudeOrchestrator.js');
-    const pass3Result = await executePass3(run_id);
-
-    emitPassComplete(run_id, {
-      pass: 3,
-      percentage: 100,
-      stats: pass3Result,
-      message: `Pass 3 complete: ${pass3Result.pass3_matched} AI matches, ${pass3Result.draft_actions_count} draft actions.`,
-    });
-
-    emitRunComplete(run_id, {
-      status: 'complete',
-      stats: pass3Result,
-      message: `Reconciliation finished with ${pass3Result.match_rate}% match rate!`,
-    });
+    if (!updatedRun) {
+      updatedRun = MemoryStore.getRun(run_id) || p12Result.run;
+    }
 
     return res.status(200).json({
       success: true,
-      message: `Full 3-pass reconciliation pipeline executed for run ${run_id}`,
-      data: pass3Result,
+      message: `Full autonomous reconciliation pipeline completed for run ${run_id}`,
+      data: {
+        run: updatedRun,
+        pass1_matched: updatedRun?.pass1_matched || 0,
+        pass2_matched: updatedRun?.pass2_matched || 0,
+        pass3_matched: updatedRun?.pass3_matched || 0,
+        unresolved: updatedRun?.unresolved || 0,
+        match_rate: updatedRun?.match_rate || 0,
+        level0_matched: updatedRun?.level0_matched || 0,
+        level1_balanced: updatedRun?.level1_balanced || 0,
+        level2_matched: updatedRun?.level2_matched || 0,
+        ai_mode: updatedRun?.ai_mode || 'fallback',
+        pass3_diagnostics: p3Result || { status: 'skipped_or_failed', error: p3Error },
+      },
     });
   } catch (error) {
-    emitRunError(run_id, {
-      message: error.message,
-      code: error.code || 'RECONCILIATION_ERROR',
-    });
     next(error);
   }
 }
 
 /**
- * Controller: Executes Pass 3 Claude reasoning for a given run_id
+ * Controller: Executes Pass 3 Claude reasoning for exceptions on a given run_id
  * POST /api/runs/:run_id/pass3
  */
 export async function executePass3Handler(req, res, next) {
@@ -158,7 +143,30 @@ export async function getRunDetails(req, res, next) {
   try {
     const { run_id } = req.params;
 
-    const run = await Run.findOne({ run_id }).lean();
+    let run = null;
+    let matchesCount = 0;
+    let exceptionsCount = 0;
+
+    try {
+      if (mongoose.connection.readyState === 1) {
+        run = await Run.findOne({ run_id }).lean();
+        if (run) {
+          matchesCount = await Match.countDocuments({ run_id });
+          exceptionsCount = await Exception.countDocuments({ run_id });
+        }
+      }
+    } catch (e) {
+      console.warn('[Mongo getRunDetails Warning]:', e.message);
+    }
+
+    if (!run) {
+      run = MemoryStore.getRun(run_id);
+      if (run) {
+        matchesCount = MemoryStore.getMatches(run_id).length;
+        exceptionsCount = MemoryStore.getExceptions(run_id).length;
+      }
+    }
+
     if (!run) {
       return res.status(404).json({
         error: {
@@ -168,9 +176,6 @@ export async function getRunDetails(req, res, next) {
         },
       });
     }
-
-    const matchesCount = await Match.countDocuments({ run_id });
-    const exceptionsCount = await Exception.countDocuments({ run_id });
 
     return res.status(200).json({
       success: true,
@@ -191,7 +196,19 @@ export async function getRunDetails(req, res, next) {
  */
 export async function listRuns(req, res, next) {
   try {
-    const runs = await Run.find().sort({ created_at: -1 }).limit(50).lean();
+    let runs = [];
+    try {
+      if (mongoose.connection.readyState === 1) {
+        runs = await Run.find().sort({ created_at: -1 }).limit(50).lean();
+      }
+    } catch (e) {
+      console.warn('[Mongo listRuns Warning]:', e.message);
+    }
+
+    if (!runs || runs.length === 0) {
+      runs = MemoryStore.listRuns();
+    }
+
     return res.status(200).json({
       success: true,
       count: runs.length,
@@ -209,8 +226,20 @@ export async function listRuns(req, res, next) {
 export async function listRunSettlements(req, res, next) {
   try {
     const { run_id } = req.params;
-    const SettlementReport = (await import('../models/SettlementReport.js')).default;
-    const settlements = await SettlementReport.find({ run_id }).sort({ settled_at: -1 }).lean();
+    let settlements = [];
+
+    try {
+      if (mongoose.connection.readyState === 1) {
+        const SettlementReport = (await import('../models/SettlementReport.js')).default;
+        settlements = await SettlementReport.find({ run_id }).sort({ settled_at: -1 }).lean();
+      }
+    } catch (e) {
+      console.warn('[Mongo listRunSettlements Warning]:', e.message);
+    }
+
+    if (!settlements || settlements.length === 0) {
+      settlements = MemoryStore.getSettlementReports(run_id);
+    }
 
     return res.status(200).json({
       success: true,
@@ -229,11 +258,39 @@ export async function listRunSettlements(req, res, next) {
 export async function getRunSettlementDetail(req, res, next) {
   try {
     const { run_id, settlement_id } = req.params;
-    const SettlementReport = (await import('../models/SettlementReport.js')).default;
-    const SettlementLineItem = (await import('../models/SettlementLineItem.js')).default;
-    const BankRecord = (await import('../models/BankRecord.js')).default;
+    let settlement = null;
+    let lineItems = [];
+    let bankRecord = null;
 
-    const settlement = await SettlementReport.findOne({ run_id, settlement_id }).lean();
+    try {
+      if (mongoose.connection.readyState === 1) {
+        const SettlementReport = (await import('../models/SettlementReport.js')).default;
+        const SettlementLineItem = (await import('../models/SettlementLineItem.js')).default;
+        const BankRecord = (await import('../models/BankRecord.js')).default;
+
+        settlement = await SettlementReport.findOne({ run_id, settlement_id }).lean();
+        if (settlement) {
+          lineItems = await SettlementLineItem.find({ run_id, settlement_id }).lean();
+          bankRecord = settlement.bank_record_id
+            ? await BankRecord.findOne({ run_id, id: settlement.bank_record_id }).lean()
+            : null;
+        }
+      }
+    } catch (e) {
+      console.warn('[Mongo getRunSettlementDetail Warning]:', e.message);
+    }
+
+    if (!settlement) {
+      const allReports = MemoryStore.getSettlementReports(run_id);
+      settlement = allReports.find((s) => s.settlement_id === settlement_id) || null;
+      if (settlement) {
+        const allLines = MemoryStore.getSettlementLineItems(run_id);
+        lineItems = allLines.filter((l) => l.settlement_id === settlement_id);
+        const allBanks = MemoryStore.getBankRecords(run_id);
+        bankRecord = allBanks.find((b) => b.id === settlement.bank_record_id) || null;
+      }
+    }
+
     if (!settlement) {
       return res.status(404).json({
         error: {
@@ -242,11 +299,6 @@ export async function getRunSettlementDetail(req, res, next) {
         },
       });
     }
-
-    const lineItems = await SettlementLineItem.find({ run_id, settlement_id }).lean();
-    const bankRecord = settlement.bank_record_id
-      ? await BankRecord.findOne({ run_id, id: settlement.bank_record_id }).lean()
-      : null;
 
     return res.status(200).json({
       success: true,
@@ -261,4 +313,3 @@ export async function getRunSettlementDetail(req, res, next) {
     next(error);
   }
 }
-

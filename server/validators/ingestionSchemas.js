@@ -40,6 +40,8 @@ export const BankRecordRowSchema = z.object({
   narration: z.string({ required_error: 'narration is required' }).trim().min(1, 'narration cannot be empty'),
 });
 
+export const BankRecordSchema = BankRecordRowSchema;
+
 /**
  * Ledger CSV Row Schema
  */
@@ -49,6 +51,32 @@ export const LedgerRecordRowSchema = z.object({
   amount: AmountSchema,
   invoice_ref: z.string({ required_error: 'invoice_ref is required' }).trim().min(1, 'invoice_ref cannot be empty'),
   payee: z.string({ required_error: 'payee is required' }).trim().min(1, 'payee cannot be empty'),
+});
+
+export const LedgerRecordSchema = LedgerRecordRowSchema;
+
+/**
+ * Settlement Report Schema
+ */
+export const SettlementReportSchema = z.object({
+  settlement_id: z.string({ required_error: 'settlement_id is required' }).trim(),
+  utr: z.string().trim().optional(),
+  amount_settled: AmountSchema,
+  fee_total: AmountSchema.optional(),
+  tax_total: AmountSchema.optional(),
+  count: z.number().optional(),
+});
+
+/**
+ * Settlement Line Item Schema
+ */
+export const SettlementLineItemSchema = z.object({
+  payment_id: z.string({ required_error: 'payment_id is required' }).trim(),
+  settlement_id: z.string({ required_error: 'settlement_id is required' }).trim(),
+  order_id: z.string().trim().optional(),
+  amount: AmountSchema,
+  fee: AmountSchema.optional(),
+  tax: AmountSchema.optional(),
 });
 
 /**

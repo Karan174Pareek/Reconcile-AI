@@ -42,20 +42,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Database connection assurance middleware for serverless invocations
 app.use(async (req, res, next) => {
   try {
-    if (req.path.startsWith('/api') || req.path.startsWith('/runs') || req.path.startsWith('/exceptions') || req.path.startsWith('/draft-actions') || req.path.startsWith('/audit-logs') || req.path.startsWith('/auth')) {
+    if (process.env.MONGO_URI && (req.path.startsWith('/api') || req.path.startsWith('/runs') || req.path.startsWith('/exceptions') || req.path.startsWith('/draft-actions') || req.path.startsWith('/audit-logs') || req.path.startsWith('/auth'))) {
       await connectDB();
     }
-    next();
   } catch (err) {
-    console.error('[DB Middleware Connection Error]:', err.message);
-    return res.status(500).json({
-      error: {
-        code: 'DATABASE_CONNECTION_ERROR',
-        message: err.message || 'Failed to establish database connection with MongoDB Atlas',
-        details: null,
-      },
-    });
+    console.warn('[DB Middleware - Memory Fallback Active]:', err.message);
   }
+  next();
 });
 
 import runsRouter from './routes/runs.js';

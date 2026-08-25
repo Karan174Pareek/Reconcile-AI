@@ -1,187 +1,161 @@
+import path from 'path';
 import multer from 'multer';
-import Papa from 'papaparse';
 import crypto from 'crypto';
-import {
-  BankRecordRowSchema,
-  LedgerRecordRowSchema,
-  validateCsvRows,
-} from '../validators/ingestionSchemas.js';
+import mongoose from 'mongoose';
+import Papa from 'papaparse';
 import Run from '../models/Run.js';
 import BankRecord from '../models/BankRecord.js';
 import LedgerRecord from '../models/LedgerRecord.js';
 import SettlementReport from '../models/SettlementReport.js';
 import SettlementLineItem from '../models/SettlementLineItem.js';
 import { generateRazorpaySeedData } from '../scripts/generateSeed.js';
+import { MemoryStore } from '../services/memoryStore.js';
+import {
+  BankRecordSchema,
+  LedgerRecordSchema,
+  SettlementReportSchema,
+  SettlementLineItemSchema,
+} from '../validators/ingestionSchemas.js';
 
-// Configure Multer for in-memory CSV file handling (up to 25MB per file)
+// Configure Multer for in-memory CSV buffer handling (10MB limit)
 const storage = multer.memoryStorage();
 export const uploadMiddleware = multer({
   storage,
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (
-      file.mimetype === 'text/csv' ||
-      file.mimetype === 'application/vnd.ms-excel' ||
-      file.originalname.toLowerCase().endsWith('.csv')
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error(`Invalid file type for ${file.fieldname}. Only CSV files are supported.`));
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.csv') {
+      return cb(new Error('Only CSV files are permitted for statement ingestion.'));
     }
+    cb(null, true);
   },
 }).fields([
   { name: 'bank_csv', maxCount: 1 },
   { name: 'ledger_csv', maxCount: 1 },
-  { name: 'settlements_csv', maxCount: 1 },
-  { name: 'line_items_csv', maxCount: 1 },
+  { name: 'settlement_csv', maxCount: 1 },
 ]);
 
 /**
- * Parses raw CSV buffer using PapaParse in strict mode
+ * Helper: Parses and validates a CSV buffer against a Zod schema
  */
-function parseCsvBuffer(buffer) {
-  const content = buffer.toString('utf8');
-  const parseResult = Papa.parse(content, {
+function parseAndValidateCsv(buffer, schema, recordType) {
+  const csvString = buffer.toString('utf-8');
+  const parseResult = Papa.parse(csvString, {
     header: true,
     skipEmptyLines: true,
-    transformHeader: (h) => h.trim().toLowerCase().replace(/[\s-]+/g, '_'),
+    dynamicTyping: true,
   });
 
-  return parseResult.data;
+  if (parseResult.errors && parseResult.errors.length > 0) {
+    const criticalErrors = parseResult.errors.filter((e) => e.type !== 'Delimiter');
+    if (criticalErrors.length > 0) {
+      throw new Error(`CSV Parsing failed for ${recordType}: ${criticalErrors[0].message}`);
+    }
+  }
+
+  const validRecords = [];
+  const validationErrors = [];
+
+  parseResult.data.forEach((row, index) => {
+    const result = schema.safeParse(row);
+    if (!result.success) {
+      validationErrors.push({
+        row: index + 2,
+        errors: result.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`),
+      });
+    } else {
+      validRecords.push(result.data);
+    }
+  });
+
+  return { validRecords, validationErrors };
 }
 
 /**
- * Controller: Handles bank & ledger CSV upload with strict Zod validation
+ * Controller: Handles multipart CSV uploads for bank and ledger statements
  * POST /api/runs/upload
  */
 export async function uploadCsvFiles(req, res, next) {
   try {
-    const files = req.files;
-
-    if (!files || !files.bank_csv || !files.ledger_csv) {
+    if (!req.files || (!req.files.bank_csv && !req.files.ledger_csv)) {
       return res.status(400).json({
         error: {
           code: 'MISSING_FILES',
-          message: 'Both "bank_csv" and "ledger_csv" files are required.',
+          message: 'Both bank_csv and ledger_csv files are required.',
           details: null,
         },
       });
     }
 
-    const bankRows = parseCsvBuffer(files.bank_csv[0].buffer);
-    const ledgerRows = parseCsvBuffer(files.ledger_csv[0].buffer);
+    const runId = `RUN-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const allErrors = {};
 
-    const { validRecords: validBankRows, errors: bankErrors } = validateCsvRows(
-      bankRows,
-      BankRecordRowSchema,
-      'bank'
-    );
-    const { validRecords: validLedgerRows, errors: ledgerErrors } = validateCsvRows(
-      ledgerRows,
-      LedgerRecordRowSchema,
-      'ledger'
-    );
+    let bankRecords = [];
+    if (req.files.bank_csv) {
+      const { validRecords, validationErrors } = parseAndValidateCsv(
+        req.files.bank_csv[0].buffer,
+        BankRecordSchema,
+        'Bank Statement'
+      );
+      if (validationErrors.length > 0) allErrors.bank_errors = validationErrors;
+      bankRecords = validRecords.map((r) => ({ ...r, run_id: runId, status: 'unmatched' }));
+    }
 
-    if (bankErrors.length > 0 || ledgerErrors.length > 0) {
+    let ledgerRecords = [];
+    if (req.files.ledger_csv) {
+      const { validRecords, validationErrors } = parseAndValidateCsv(
+        req.files.ledger_csv[0].buffer,
+        LedgerRecordSchema,
+        'Internal Ledger'
+      );
+      if (validationErrors.length > 0) allErrors.ledger_errors = validationErrors;
+      ledgerRecords = validRecords.map((r) => ({ ...r, run_id: runId, status: 'unmatched' }));
+    }
+
+    if (Object.keys(allErrors).length > 0) {
       return res.status(400).json({
         error: {
           code: 'CSV_VALIDATION_ERROR',
-          message: `CSV validation failed with ${bankErrors.length} bank error(s) and ${ledgerErrors.length} ledger error(s).`,
-          details: {
-            bank_errors: bankErrors,
-            ledger_errors: ledgerErrors,
-          },
+          message: 'CSV validation failed for one or more files.',
+          details: allErrors,
         },
       });
     }
 
-    const runId = req.body.run_id || `RUN-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-
-    const bankDocs = validBankRows.map((row) => ({
-      id: row.id || `BNK-${crypto.randomUUID().substring(0, 8)}`,
-      run_id: runId,
-      date: row.date,
-      amount: row.amount,
-      utr_ref: row.utr_ref,
-      narration: row.narration,
-      status: 'pending',
-    }));
-
-    const ledgerDocs = validLedgerRows.map((row) => ({
-      id: row.id || `LED-${crypto.randomUUID().substring(0, 8)}`,
-      run_id: runId,
-      date: row.date,
-      amount: row.amount,
-      invoice_ref: row.invoice_ref,
-      payee: row.payee,
-      status: 'pending',
-    }));
-
-    // If optional settlement files were also uploaded
-    let settlementDocs = [];
-    let lineItemDocs = [];
-    if (files.settlements_csv) {
-      const setlRows = parseCsvBuffer(files.settlements_csv[0].buffer);
-      settlementDocs = setlRows.map((r) => ({
-        run_id: runId,
-        settlement_id: r.settlement_id,
-        amount: Number(r.amount) || 0,
-        gross_amount: Number(r.gross_amount) || 0,
-        fees: Number(r.fees) || 0,
-        tax: Number(r.tax) || 0,
-        refunds: Number(r.refunds) || 0,
-        utr: r.utr,
-        status: r.status || 'settled',
-        settled_at: new Date(r.settled_at || r.date || new Date()),
-        item_count: Number(r.item_count) || 0,
-      }));
-    }
-
-    if (files.line_items_csv) {
-      const lineRows = parseCsvBuffer(files.line_items_csv[0].buffer);
-      lineItemDocs = lineRows.map((r) => ({
-        run_id: runId,
-        settlement_id: r.settlement_id,
-        payment_id: r.payment_id,
-        order_id: r.order_id,
-        type: r.type || 'payment',
-        amount: Number(r.amount) || 0,
-        fee: Number(r.fee) || 0,
-        tax: Number(r.tax) || 0,
-        debit: Number(r.debit) || 0,
-        credit: Number(r.credit) || 0,
-        net_amount: Number(r.net_amount) || 0,
-        settled_at: new Date(r.settled_at || r.date || new Date()),
-      }));
-    }
-
-    const totalRecords = lineItemDocs.length > 0 ? lineItemDocs.length : bankDocs.length;
-
-    await Run.create({
+    const runDoc = {
       run_id: runId,
       status: 'pending',
-      total_records: totalRecords,
+      total_records: bankRecords.length,
       pass1_matched: 0,
       pass2_matched: 0,
       pass3_matched: 0,
-      unresolved: totalRecords,
+      unresolved: bankRecords.length,
       match_rate: 0.0,
       created_at: new Date(),
-    });
+      completed_at: null,
+    };
 
-    if (bankDocs.length > 0) await BankRecord.insertMany(bankDocs, { ordered: false });
-    if (ledgerDocs.length > 0) await LedgerRecord.insertMany(ledgerDocs, { ordered: false });
-    if (settlementDocs.length > 0) await SettlementReport.insertMany(settlementDocs, { ordered: false });
-    if (lineItemDocs.length > 0) await SettlementLineItem.insertMany(lineItemDocs, { ordered: false });
+    MemoryStore.saveRun(runDoc);
+    MemoryStore.saveSeedData(runId, { bankRecords, ledgerRecords });
+
+    try {
+      if (mongoose.connection.readyState === 1) {
+        await Promise.all([
+          Run.create(runDoc),
+          bankRecords.length ? BankRecord.insertMany(bankRecords, { ordered: false }) : Promise.resolve(),
+          ledgerRecords.length ? LedgerRecord.insertMany(ledgerRecords, { ordered: false }) : Promise.resolve(),
+        ]);
+      }
+    } catch (mongoErr) {
+      console.warn('[Mongo Upload Ingestion Warning]:', mongoErr.message);
+    }
 
     return res.status(201).json({
       success: true,
-      message: 'CSVs uploaded and validated successfully',
+      message: `Reconciliation run ${runId} initialized successfully.`,
       run_id: runId,
-      total_bank_records: bankDocs.length,
-      total_ledger_records: ledgerDocs.length,
-      total_settlement_batches: settlementDocs.length,
-      total_line_items: lineItemDocs.length,
+      total_bank_records: bankRecords.length,
+      total_ledger_records: ledgerRecords.length,
     });
   } catch (error) {
     next(error);
@@ -198,38 +172,46 @@ export async function generateSeedRun(req, res, next) {
 
     const data = await generateRazorpaySeedData(runId);
 
-    await Promise.all([
-      Run.findOneAndUpdate(
-        { run_id: runId },
-        {
-          run_id: runId,
-          status: 'pending',
-          total_records: data.settlementLineItems.length,
-          pass1_matched: 0,
-          pass2_matched: 0,
-          pass3_matched: 0,
-          unresolved: data.settlementLineItems.length,
-          match_rate: 0.0,
-          created_at: new Date(),
-          completed_at: null,
-        },
-        { upsert: true, new: true }
-      ),
-      data.bankRecords?.length ? BankRecord.insertMany(data.bankRecords, { ordered: false }) : Promise.resolve(),
-      data.ledgerRecords?.length ? LedgerRecord.insertMany(data.ledgerRecords, { ordered: false }) : Promise.resolve(),
-      data.settlementReports?.length ? SettlementReport.insertMany(data.settlementReports, { ordered: false }) : Promise.resolve(),
-      data.settlementLineItems?.length ? SettlementLineItem.insertMany(data.settlementLineItems, { ordered: false }) : Promise.resolve(),
-    ]);
+    const runData = {
+      run_id: runId,
+      status: 'pending',
+      total_records: data.settlementLineItems?.length || 500,
+      pass1_matched: 0,
+      pass2_matched: 0,
+      pass3_matched: 0,
+      unresolved: data.settlementLineItems?.length || 500,
+      match_rate: 0.0,
+      created_at: new Date(),
+      completed_at: null,
+    };
+
+    // Always cache in MemoryStore for 100% serverless availability
+    MemoryStore.saveRun(runData);
+    MemoryStore.saveSeedData(runId, data);
+
+    try {
+      if (mongoose.connection.readyState === 1) {
+        await Promise.all([
+          Run.findOneAndUpdate({ run_id: runId }, runData, { upsert: true, new: true }),
+          data.bankRecords?.length ? BankRecord.insertMany(data.bankRecords, { ordered: false }) : Promise.resolve(),
+          data.ledgerRecords?.length ? LedgerRecord.insertMany(data.ledgerRecords, { ordered: false }) : Promise.resolve(),
+          data.settlementReports?.length ? SettlementReport.insertMany(data.settlementReports, { ordered: false }) : Promise.resolve(),
+          data.settlementLineItems?.length ? SettlementLineItem.insertMany(data.settlementLineItems, { ordered: false }) : Promise.resolve(),
+        ]);
+      }
+    } catch (mongoErr) {
+      console.warn('[Mongo Ingestion Warning - Memory Fallback Active]:', mongoErr.message);
+    }
 
     return res.status(201).json({
       success: true,
       message: `Razorpay Settlement Seed dataset generated for run ${runId}`,
       run_id: runId,
       stats: {
-        bank_credits: data.bankRecords.length,
-        settlement_batches: data.settlementReports.length,
-        total_order_line_items: data.settlementLineItems.length,
-        ledger_records: data.ledgerRecords.length,
+        bank_credits: data.bankRecords?.length || 0,
+        settlement_batches: data.settlementReports?.length || 0,
+        total_order_line_items: data.settlementLineItems?.length || 0,
+        ledger_records: data.ledgerRecords?.length || 0,
       },
     });
   } catch (error) {

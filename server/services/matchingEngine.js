@@ -1,5 +1,6 @@
 import { computeTextSimilarity, dateDiffInDays } from '../utils/similarity.js';
 import { emitRunProgress } from '../sockets/runSocket.js';
+import mongoose from 'mongoose';
 
 /**
  * Normalizes reference tokens for exact and UTR matching
@@ -617,7 +618,7 @@ export function reconcileRecords(rawBankRecords = [], rawLedgerRecords = [], opt
 }
 
 /**
- * Executes reconciliation across MongoDB collections for a given runId
+ * Executes reconciliation across MongoDB collections (or in-memory cache) for a given runId
  */
 export async function executeRun(runId, options = {}) {
   const Run = (await import('../models/Run.js')).default;
@@ -627,21 +628,60 @@ export async function executeRun(runId, options = {}) {
   const SettlementLineItem = (await import('../models/SettlementLineItem.js')).default;
   const Match = (await import('../models/Match.js')).default;
   const Exception = (await import('../models/Exception.js')).default;
+  const { MemoryStore } = await import('./memoryStore.js');
 
-  const run = await Run.findOne({ run_id: runId });
+  let run = null;
+  try {
+    if (mongoose.connection.readyState === 1) {
+      run = await Run.findOne({ run_id: runId });
+    }
+  } catch (e) {
+    console.warn('[Mongo Run Find Warning]:', e.message);
+  }
+
+  if (!run) {
+    run = MemoryStore.getRun(runId);
+  }
+
   if (!run) {
     const err = new Error(`Run ${runId} not found`);
     err.statusCode = 404;
     throw err;
   }
 
-  await Match.deleteMany({ run_id: runId });
-  await Exception.deleteMany({ run_id: runId });
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await Match.deleteMany({ run_id: runId });
+      await Exception.deleteMany({ run_id: runId });
+    }
+  } catch (e) {
+    console.warn('[Mongo Delete Warning]:', e.message);
+  }
 
-  const bankRecords = await BankRecord.find({ run_id: runId }).lean();
-  const ledgerRecords = await LedgerRecord.find({ run_id: runId }).lean();
-  const settlementReports = await SettlementReport.find({ run_id: runId }).lean();
-  const settlementLineItems = await SettlementLineItem.find({ run_id: runId }).lean();
+  let bankRecords = [];
+  let ledgerRecords = [];
+  let settlementReports = [];
+  let settlementLineItems = [];
+
+  try {
+    if (mongoose.connection.readyState === 1) {
+      [bankRecords, ledgerRecords, settlementReports, settlementLineItems] = await Promise.all([
+        BankRecord.find({ run_id: runId }).lean(),
+        LedgerRecord.find({ run_id: runId }).lean(),
+        SettlementReport.find({ run_id: runId }).lean(),
+        SettlementLineItem.find({ run_id: runId }).lean(),
+      ]);
+    }
+  } catch (e) {
+    console.warn('[Mongo Records Find Warning]:', e.message);
+  }
+
+  if (!bankRecords.length && !settlementReports.length) {
+    bankRecords = MemoryStore.getBankRecords(runId);
+    ledgerRecords = MemoryStore.getLedgerRecords(runId);
+    settlementReports = MemoryStore.getSettlementReports(runId);
+    settlementLineItems = MemoryStore.getSettlementLineItems(runId);
+  }
 
   if (settlementReports.length > 0 && settlementLineItems.length > 0) {
     emitRunProgress(runId, {
