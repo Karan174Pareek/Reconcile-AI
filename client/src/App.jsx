@@ -143,6 +143,13 @@ export default function App() {
                 onOpenExplainer={() => setIsExplainerOpen(true)}
                 onNavigateTab={(tab) => setActiveTab(tab)}
                 onRunCreated={handleRunCreated}
+                runData={runData}
+                isConnected={isConnected}
+                liveProgress={liveProgress}
+                liveEvents={liveEvents}
+                onExecuteFullPipeline={handleExecuteFullPipeline}
+                isExecutingPipeline={isExecutingPipeline}
+                refreshRun={refreshRun}
               />
             </motion.div>
           )}

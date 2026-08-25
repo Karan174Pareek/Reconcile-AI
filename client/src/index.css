@@ -185,3 +185,19 @@ body {
   padding: 0.25rem 0.625rem;
   border-radius: 9999px;
 }
+
+/* Subtle Technical Grid Background */
+.bg-tech-grid {
+  background-image: radial-gradient(rgba(148, 163, 184, 0.18) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@keyframes pulse-flow {
+  0%, 100% { opacity: 0.4; transform: scale(0.98); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.animate-pulse-flow {
+  animation: pulse-flow 2s infinite ease-in-out;
+}
+

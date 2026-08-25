@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import BrandLogo from './BrandLogo.jsx';
 import {
   Activity,
   Layers,
@@ -65,9 +66,7 @@ export default function Navbar({
               onClick={() => onSelectTab('overview')}
               className="flex items-center space-x-2 sm:space-x-2.5 text-left focus:outline-hidden cursor-pointer group"
             >
-              <div className="h-8 w-8 rounded-lg overflow-hidden bg-gray-950 flex items-center justify-center shadow-xs border border-gray-200/50 group-hover:scale-105 transition-transform shrink-0">
-                <img src="/logo.png" alt="ReconcileAI Logo" className="h-full w-full object-cover" />
-              </div>
+              <BrandLogo className="h-8 w-8 sm:h-9 sm:w-9 group-hover:scale-105 transition-transform" />
               <div className="flex items-center space-x-1.5">
                 <span className="font-bold text-sm sm:text-base text-gray-900 tracking-tight">ReconcileAI</span>
                 <span className="text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
