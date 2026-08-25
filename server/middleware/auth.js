@@ -16,17 +16,6 @@ export async function requireAuth(req, res, next) {
       token = authHeader.split(' ')[1];
     }
 
-    // Check for demo mode / demo user header in non-strict development mode
-    if (!token && (process.env.NODE_ENV !== 'production' || req.headers['x-demo-user'])) {
-      const demoEmail = req.headers['x-demo-user'] || 'analyst@reconcile.ai';
-      req.user = {
-        email: demoEmail,
-        role: 'analyst',
-        is_demo: true,
-      };
-      return next();
-    }
-
     if (!token) {
       return res.status(401).json({
         error: {

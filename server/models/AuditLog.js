@@ -19,7 +19,7 @@ const AuditLogSchema = new mongoose.Schema(
     },
     target_type: {
       type: String,
-      enum: ['match', 'exception', 'draft_action', 'agent_query'],
+      enum: ['match', 'exception', 'draft_action', 'agent_query', 'settlement'],
       required: true,
       index: true,
     },

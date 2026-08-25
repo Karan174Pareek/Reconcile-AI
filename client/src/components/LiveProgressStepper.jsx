@@ -19,13 +19,14 @@ export default function LiveProgressStepper({
   onExecuteFullPipeline,
   isExecuting,
 }) {
-  const status = run?.status || 'pending';
-  const pass1Count = run?.pass1_matched || 0;
-  const pass2Count = run?.pass2_matched || 0;
-  const pass3Count = run?.pass3_matched || 0;
+  const level0Matched = run?.level0_matched ?? (pass1Count > 0 ? 1 : 0);
+  const level0Total = run?.level0_total ?? (run?.total_records ? Math.ceil(run.total_records / 30) : 0);
+  const level1Balanced = run?.level1_balanced ?? 0;
+  const level1Flagged = run?.level1_flagged ?? 0;
+  const level2Reconciled = (run?.level2_matched || pass1Count || 0) + pass3Count;
 
-  const isLevel0Done = pass1Count > 0 || status === 'complete';
-  const isLevel1Done = pass1Count > 0 || status === 'complete';
+  const isLevel0Done = level0Matched > 0 || pass1Count > 0 || status === 'complete';
+  const isLevel1Done = (level1Balanced > 0 || level1Flagged > 0 || pass1Count > 0) && isLevel0Done;
   const isLevel2Done = status === 'complete';
 
   const stages = [
@@ -35,8 +36,12 @@ export default function LiveProgressStepper({
       desc: 'Correlates nodal bank credits to Razorpay batch headers using UTR and net settlement amounts.',
       icon: Layers,
       isDone: isLevel0Done,
-      isActive: isExecuting && !isLevel0Done,
-      statsText: isLevel0Done ? '16 / 17 Matched (94.1%)' : 'Waiting to run',
+      isActive: (isExecuting || status === 'running') && !isLevel0Done,
+      statsText: isLevel0Done
+        ? level0Total > 0
+          ? `${level0Matched} / ${level0Total} Matched (${Math.round((level0Matched / level0Total) * 100)}%)`
+          : `${level0Matched} Matched`
+        : 'Waiting to run',
     },
     {
       level: 'Step 2',
@@ -44,17 +49,21 @@ export default function LiveProgressStepper({
       desc: 'Verifies the sum of individual order payments matches the bank credit within ₹0.05, flagging any imbalances.',
       icon: ShieldCheck,
       isDone: isLevel1Done,
-      isActive: isExecuting && isLevel0Done && !isLevel1Done,
-      statsText: isLevel1Done ? '15 Batches Balanced (1 Flagged)' : 'Waiting to run',
+      isActive: (isExecuting || status === 'running') && isLevel0Done && !isLevel1Done,
+      statsText: isLevel1Done
+        ? `${level1Balanced} Batches Balanced (${level1Flagged} Flagged)`
+        : 'Waiting to run',
     },
     {
       level: 'Step 3',
       title: 'Unpack Orders & Tax Credits',
-      desc: 'Matches 500+ order line items, isolates 2% payment gateway MDR fees, and computes 18% claimable GST Input Tax Credits.',
+      desc: 'Matches individual order line items, isolates 2% gateway MDR fees, and computes 18% claimable GST Input Tax Credits.',
       icon: Sparkles,
       isDone: isLevel2Done,
-      isActive: isExecuting && isLevel1Done,
-      statsText: isLevel2Done ? `${pass2Count || pass3Count || 420} Orders Reconciled` : 'Waiting to run',
+      isActive: (isExecuting || status === 'running') && isLevel1Done && !isLevel2Done,
+      statsText: isLevel2Done
+        ? `${level2Reconciled} / ${run?.total_records || level2Reconciled} Orders Reconciled (${run?.match_rate || 0}%)`
+        : 'Waiting to run',
     },
   ];
 

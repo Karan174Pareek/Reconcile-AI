@@ -20,6 +20,7 @@ import runsRouter from './routes/runs.js';
 import exceptionsRouter from './routes/exceptions.js';
 import draftActionsRouter from './routes/draftActions.js';
 import auditLogsRouter from './routes/auditLogs.js';
+import authRouter from './routes/auth.js';
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -31,6 +32,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // API Routes
+app.use('/api/auth', authRouter);
 app.use('/api/runs', runsRouter);
 app.use('/api/exceptions', exceptionsRouter);
 app.use('/api/draft-actions', draftActionsRouter);

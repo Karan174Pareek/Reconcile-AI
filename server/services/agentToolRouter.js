@@ -166,6 +166,7 @@ export const CLAUDE_AGENT_TOOLS = [
  */
 export async function executeAgentTool(runId, toolName, inputArgs = {}) {
   const limit = Math.min(Math.max(1, Number(inputArgs.limit) || 20), 50);
+  let result = null;
 
   switch (toolName) {
     case 'query_settlements': {
@@ -177,7 +178,7 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
         .sort({ settled_at: -1 })
         .lean();
 
-      return {
+      result = {
         count: settlements.length,
         settlements: settlements.map((s) => ({
           settlement_id: s.settlement_id,
@@ -193,14 +194,21 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
           item_count: s.item_count,
         })),
       };
+      break;
     }
 
     case 'get_settlement_detail': {
       const { settlement_id } = inputArgs;
-      if (!settlement_id) return { error: 'settlement_id is required' };
+      if (!settlement_id) {
+        result = { error: 'settlement_id is required' };
+        break;
+      }
 
       const settlement = await SettlementReport.findOne({ run_id: runId, settlement_id }).lean();
-      if (!settlement) return { error: `Settlement "${settlement_id}" not found` };
+      if (!settlement) {
+        result = { error: `Settlement "${settlement_id}" not found` };
+        break;
+      }
 
       const lineItems = await SettlementLineItem.find({ run_id: runId, settlement_id })
         .limit(100)
@@ -210,7 +218,7 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
         ? await BankRecord.findOne({ run_id: runId, id: settlement.bank_record_id }).lean()
         : null;
 
-      return {
+      result = {
         settlement,
         bankRecord,
         line_items_count: lineItems.length,
@@ -226,6 +234,7 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
           variance_category: li.variance_category,
         })),
       };
+      break;
     }
 
     case 'query_matches': {
@@ -237,7 +246,7 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
       }
 
       const matches = await Match.find(query).limit(limit).sort({ created_at: -1 }).lean();
-      return {
+      result = {
         count: matches.length,
         matches: matches.map((m) => ({
           level: m.level,
@@ -252,6 +261,7 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
           variance_category: m.variance_category,
         })),
       };
+      break;
     }
 
     case 'query_exceptions': {
@@ -261,7 +271,7 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
       if (inputArgs.human_decision) query.human_decision = inputArgs.human_decision;
 
       const exceptions = await Exception.find(query).limit(limit).sort({ created_at: -1 }).lean();
-      return {
+      result = {
         count: exceptions.length,
         exceptions: exceptions.map((e) => ({
           id: e._id?.toString() || e.id,
@@ -279,6 +289,7 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
           human_decision: e.human_decision,
         })),
       };
+      break;
     }
 
     case 'query_audit_log': {
@@ -286,7 +297,7 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
       if (inputArgs.target_type) query.target_type = inputArgs.target_type;
 
       const logs = await AuditLog.find(query).limit(limit).sort({ timestamp: -1 }).lean();
-      return {
+      result = {
         count: logs.length,
         logs: logs.map((l) => ({
           id: l._id?.toString(),
@@ -298,6 +309,7 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
           details: l.details,
         })),
       };
+      break;
     }
 
     case 'get_record_by_id': {
@@ -355,13 +367,35 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
       }
 
       if (!doc) {
-        return { message: `No record found in "${collection}" matching ID "${id}"` };
+        result = { message: `No record found in "${collection}" matching ID "${id}"` };
+      } else {
+        result = { collection, record: doc };
       }
-
-      return { collection, record: doc };
+      break;
     }
 
     default:
-      return { error: `Unknown tool: ${toolName}` };
+      result = { error: `Unknown tool: ${toolName}` };
+      break;
   }
+
+  // Audit Logging for Agent Tool Execution
+  try {
+    await AuditLog.create({
+      run_id: runId,
+      actor: 'claude',
+      action: `agent_tool_call:${toolName}`,
+      target_type: 'agent_query',
+      target_id: inputArgs.id || inputArgs.settlement_id || null,
+      details: {
+        tool: toolName,
+        arguments: inputArgs,
+      },
+    });
+  } catch (auditErr) {
+    console.warn('[AuditLog] Agent tool logging note:', auditErr.message);
+  }
+
+  return result;
 }
+
