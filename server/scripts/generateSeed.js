@@ -59,6 +59,7 @@ export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026')
   const settlementLineItems = [];
   const bankRecords = [];
 
+  const runSlug = runId.replace(/[^a-zA-Z0-9]/g, '').slice(-8);
   const baseDate = new Date('2026-08-01T09:00:00.000Z');
   let orderCounter = 10001;
   let paymentCounter = 20001;
@@ -66,12 +67,11 @@ export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026')
 
   // We will generate 16 settlement batches totaling 500+ order line items
   const NUM_BATCHES = 16;
-  const ORDERS_PER_BATCH_AVG = 32; // 16 * 32 ~= 512 records
 
   for (let bIdx = 0; bIdx < NUM_BATCHES; bIdx++) {
-    const setlId = `setl_DGlQ${setlCounter}os78Ec`;
+    const setlId = `setl_${runSlug}_${setlCounter}`;
     const utrNumber = `88290${setlCounter}`;
-    const utrRef = `UTR-RAZORPAY-${utrNumber}`;
+    const utrRef = `UTR-${runSlug}-${utrNumber}`;
     const batchDayOffset = bIdx * 2; // T+2 cadence
     const txnDate = new Date(baseDate.getTime() + batchDayOffset * 24 * 60 * 60 * 1000);
     const settledDate = new Date(txnDate.getTime() + 2 * 24 * 60 * 60 * 1000); // T+2 settlement date
@@ -88,8 +88,8 @@ export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026')
     const batchLineItems = [];
 
     for (let oIdx = 0; oIdx < batchOrderCount; oIdx++) {
-      const orderId = `order_MOCK_${orderCounter++}`;
-      const paymentId = `pay_N09${paymentCounter++}`;
+      const orderId = `ord_${runSlug}_${orderCounter++}`;
+      const paymentId = `pay_${runSlug}_${paymentCounter++}`;
       const customer = randomChoice(CUSTOMERS);
       const grossAmount = randomBetween(1200, 38000);
 
@@ -203,13 +203,13 @@ export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026')
       settled_at: settledDate,
       item_count: batchLineItems.length,
       integrity_status: 'pending',
-      bank_record_id: `BNK-SETL-${setlCounter}`,
+      bank_record_id: `BNK-${runSlug}-${setlCounter}`,
     });
 
     // 1 Bank credit per settlement batch
     bankRecords.push({
       run_id: runId,
-      id: `BNK-SETL-${setlCounter}`,
+      id: `BNK-${runSlug}-${setlCounter}`,
       date: settledDate,
       amount: statedSettlementAmount,
       utr_ref: utrRef,
@@ -224,10 +224,10 @@ export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026')
   // Also add 2 stray bank fee debits to bank statement
   bankRecords.push({
     run_id: runId,
-    id: `BNK-FEE-001`,
+    id: `BNK-FEE-${runSlug}-001`,
     date: new Date('2026-08-15T12:00:00.000Z'),
     amount: -750.0,
-    utr_ref: 'CHG-CMS-8821',
+    utr_ref: `CHG-${runSlug}-8821`,
     narration: 'CMS MONTHLY MAINTENANCE CHARGES + GST',
     status: 'pending',
   });

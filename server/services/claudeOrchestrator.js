@@ -439,7 +439,7 @@ export async function executePass3(runId, options = {}) {
     }
 
     if (newMatches.length > 0) {
-      await Match.insertMany(newMatches);
+      await Match.insertMany(newMatches, { ordered: false });
       await SettlementLineItem.updateMany(
         { run_id: runId, payment_id: { $in: matchedLineItemIds } },
         { $set: { unpacked_status: 'matched' } }
@@ -608,7 +608,7 @@ export async function executePass3(runId, options = {}) {
   }
 
   if (newMatches.length > 0) {
-    await Match.insertMany(newMatches);
+    await Match.insertMany(newMatches, { ordered: false });
     await BankRecord.updateMany(
       { run_id: runId, id: { $in: matchedBankIds } },
       { $set: { status: 'matched' } }

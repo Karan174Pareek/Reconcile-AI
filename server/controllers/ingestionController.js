@@ -169,10 +169,10 @@ export async function uploadCsvFiles(req, res, next) {
       created_at: new Date(),
     });
 
-    await BankRecord.insertMany(bankDocs);
-    await LedgerRecord.insertMany(ledgerDocs);
-    if (settlementDocs.length > 0) await SettlementReport.insertMany(settlementDocs);
-    if (lineItemDocs.length > 0) await SettlementLineItem.insertMany(lineItemDocs);
+    if (bankDocs.length > 0) await BankRecord.insertMany(bankDocs, { ordered: false });
+    if (ledgerDocs.length > 0) await LedgerRecord.insertMany(ledgerDocs, { ordered: false });
+    if (settlementDocs.length > 0) await SettlementReport.insertMany(settlementDocs, { ordered: false });
+    if (lineItemDocs.length > 0) await SettlementLineItem.insertMany(lineItemDocs, { ordered: false });
 
     return res.status(201).json({
       success: true,
@@ -215,10 +215,10 @@ export async function generateSeedRun(req, res, next) {
       { upsert: true, new: true }
     );
 
-    await BankRecord.insertMany(data.bankRecords);
-    await LedgerRecord.insertMany(data.ledgerRecords);
-    await SettlementReport.insertMany(data.settlementReports);
-    await SettlementLineItem.insertMany(data.settlementLineItems);
+    if (data.bankRecords?.length) await BankRecord.insertMany(data.bankRecords, { ordered: false });
+    if (data.ledgerRecords?.length) await LedgerRecord.insertMany(data.ledgerRecords, { ordered: false });
+    if (data.settlementReports?.length) await SettlementReport.insertMany(data.settlementReports, { ordered: false });
+    if (data.settlementLineItems?.length) await SettlementLineItem.insertMany(data.settlementLineItems, { ordered: false });
 
     return res.status(201).json({
       success: true,

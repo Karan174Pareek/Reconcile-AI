@@ -673,10 +673,10 @@ export async function executeRun(runId, options = {}) {
     const allExceptions = [...l0.exceptions, ...l1.exceptions, ...l2.exceptions];
 
     if (allMatches.length > 0) {
-      await Match.insertMany(allMatches);
+      await Match.insertMany(allMatches, { ordered: false });
     }
     if (allExceptions.length > 0) {
-      await Exception.insertMany(allExceptions);
+      await Exception.insertMany(allExceptions, { ordered: false });
     }
 
     for (const bId of l0.matchedBankIds) {
@@ -743,10 +743,10 @@ export async function executeRun(runId, options = {}) {
 
   const res = reconcileRecords(bankRecords, ledgerRecords, { runId, ...options });
   if (res.matches.length > 0) {
-    await Match.insertMany(res.matches);
+    await Match.insertMany(res.matches, { ordered: false });
   }
   if (res.exceptions.length > 0) {
-    await Exception.insertMany(res.exceptions);
+    await Exception.insertMany(res.exceptions, { ordered: false });
   }
 
   const exactCount = res.matches.filter((m) => m.method === 'exact').length;
