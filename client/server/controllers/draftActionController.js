@@ -25,12 +25,14 @@ export async function getRunDraftActions(req, res, next) {
     }
 
     if (draftActions.length === 0) {
+      await MemoryStore.ensureRunHydrated(run_id);
       draftActions = MemoryStore.getDraftActions(run_id);
     }
 
     // If still empty, construct initial standard drafts from flagged exceptions
     if (draftActions.length === 0) {
-      const exceptions = MemoryStore.getExceptions(run_id);
+      const hydrated = await MemoryStore.ensureRunHydrated(run_id);
+      const exceptions = hydrated?.exceptions || MemoryStore.getExceptions(run_id);
       const generatedDrafts = exceptions
         .filter((e) => e.category === 'fee_variance' || e.category === 'batch_imbalance' || e.category === 'amount_mismatch')
         .slice(0, 8)

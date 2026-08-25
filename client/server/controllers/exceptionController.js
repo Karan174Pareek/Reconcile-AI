@@ -73,11 +73,16 @@ export async function getRunExceptions(req, res, next) {
     const ledgerMap = new Map(candidateLedgers.map((l) => [l.id, l]));
 
     // Attach populated records
-    const populated = exceptions.map((exp) => ({
-      ...exp,
-      bank_record: exp.bank_record_id ? bankMap.get(exp.bank_record_id) || null : null,
-      candidate_ledgers: (exp.candidate_ledger_ids || []).map((id) => ledgerMap.get(id)).filter(Boolean),
-    }));
+    const populated = exceptions.map((exp, idx) => {
+      const canonicalId = exp.id || exp._id || exp.payment_id || exp.order_id || exp.bank_record_id || exp.settlement_id || `exc_${idx + 1}`;
+      return {
+        ...exp,
+        _id: canonicalId,
+        id: canonicalId,
+        bank_record: exp.bank_record_id ? bankMap.get(exp.bank_record_id) || null : null,
+        candidate_ledgers: (exp.candidate_ledger_ids || []).map((cid) => ledgerMap.get(cid)).filter(Boolean),
+      };
+    });
 
     return res.status(200).json({
       success: true,
