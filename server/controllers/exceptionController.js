@@ -49,10 +49,25 @@ export async function getRunExceptions(req, res, next) {
     const bankIds = exceptions.map((e) => e.bank_record_id).filter(Boolean);
     const candidateIds = Array.from(new Set(exceptions.flatMap((e) => e.candidate_ledger_ids || []))).filter(Boolean);
 
-    const [bankRecords, candidateLedgers] = await Promise.all([
-      bankIds.length > 0 ? BankRecord.find({ run_id, id: { $in: bankIds } }).lean() : [],
-      candidateIds.length > 0 ? LedgerRecord.find({ run_id, id: { $in: candidateIds } }).lean() : [],
-    ]);
+    let bankRecords = [];
+    let candidateLedgers = [];
+    try {
+      if (mongoose.connection.readyState === 1) {
+        [bankRecords, candidateLedgers] = await Promise.all([
+          bankIds.length > 0 ? BankRecord.find({ run_id, id: { $in: bankIds } }).lean() : [],
+          candidateIds.length > 0 ? LedgerRecord.find({ run_id, id: { $in: candidateIds } }).lean() : [],
+        ]);
+      }
+    } catch (e) {
+      console.warn('[Mongo Exceptions Population Warning]:', e.message);
+    }
+
+    if (bankRecords.length === 0 && candidateLedgers.length === 0) {
+      const allBanks = MemoryStore.getBankRecords(run_id);
+      const allLedgers = MemoryStore.getLedgerRecords(run_id);
+      bankRecords = allBanks.filter((b) => bankIds.includes(b.id));
+      candidateLedgers = allLedgers.filter((l) => candidateIds.includes(l.id));
+    }
 
     const bankMap = new Map(bankRecords.map((b) => [b.id, b]));
     const ledgerMap = new Map(candidateLedgers.map((l) => [l.id, l]));
