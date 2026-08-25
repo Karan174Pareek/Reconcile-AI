@@ -1,4 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
+import mongoose from 'mongoose';
+import { MemoryStore } from './memoryStore.js';
 import {
   PASS3_SYSTEM_PROMPT,
   Pass3BatchResponseSchema,
@@ -269,7 +271,20 @@ export async function generateDraftActionContent(client, exceptionRecord, target
  * Orchestrates complete Pass 3 Claude Exception Reasoning across all unmatched records for a run.
  */
 export async function executePass3(runId, options = {}) {
-  const run = await Run.findOne({ run_id: runId });
+  let run = null;
+  try {
+    if (mongoose.connection.readyState === 1) {
+      run = await Run.findOne({ run_id: runId });
+    }
+  } catch (e) {
+    console.warn('[Mongo Pass 3 Run Find Warning]:', e.message);
+  }
+
+  if (!run) {
+    const hydrated = await MemoryStore.ensureRunHydrated(runId);
+    run = hydrated?.run || MemoryStore.getRun(runId);
+  }
+
   if (!run) {
     const err = new Error(`Run with ID "${runId}" not found`);
     err.statusCode = 404;
@@ -293,27 +308,52 @@ export async function executePass3(runId, options = {}) {
   const matchMethod = client ? 'ai' : 'heuristic';
 
   // Check if run has settlement line items
-  const lineItemCount = await SettlementLineItem.countDocuments({ run_id: runId });
+  let lineItemCount = 0;
+  let pendingLineItems = [];
+  let availableLedgerRecords = [];
+
+  try {
+    if (mongoose.connection.readyState === 1) {
+      lineItemCount = await SettlementLineItem.countDocuments({ run_id: runId });
+      if (lineItemCount > 0) {
+        pendingLineItems = await SettlementLineItem.find({
+          run_id: runId,
+          unpacked_status: { $in: ['pending', 'variance_flagged'] },
+        }).lean();
+        availableLedgerRecords = await LedgerRecord.find({
+          run_id: runId,
+          status: { $in: ['pending'] },
+        }).lean();
+      }
+    }
+  } catch (e) {
+    console.warn('[Mongo Settlement Query Warning]:', e.message);
+  }
+
+  if (pendingLineItems.length === 0 && lineItemCount === 0) {
+    const memLines = MemoryStore.getSettlementLineItems(runId);
+    if (memLines.length > 0) {
+      lineItemCount = memLines.length;
+      pendingLineItems = memLines.filter((li) => li.unpacked_status !== 'matched');
+      availableLedgerRecords = MemoryStore.getLedgerRecords(runId).filter((l) => l.status !== 'matched');
+    }
+  }
 
   if (lineItemCount > 0) {
-    // Razorpay 3-Level Settlement Unpacking mode
-    const pendingLineItems = await SettlementLineItem.find({
-      run_id: runId,
-      unpacked_status: { $in: ['pending', 'variance_flagged'] },
-    }).lean();
-
-    const availableLedgerRecords = await LedgerRecord.find({
-      run_id: runId,
-      status: { $in: ['pending'] },
-    }).lean();
-
     if (pendingLineItems.length === 0) {
       run.ai_mode = aiMode;
       if (run.status !== 'complete') {
         run.status = 'complete';
         run.completed_at = run.completed_at || new Date();
       }
-      await run.save();
+      if (typeof run.save === 'function' && mongoose.connection.readyState === 1) {
+        try {
+          await run.save();
+        } catch (e) {
+          console.warn('[Mongo Save Run Warning]:', e.message);
+        }
+      }
+      MemoryStore.saveRun(run);
       return {
         run_id: runId,
         status: run.status,
