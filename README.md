@@ -75,30 +75,30 @@ Scroll through the platform's **11 visual sections** using the sticky top naviga
 ```mermaid
 flowchart TD
     subgraph INGESTION ["1. Ingestion & Validation Layer"]
-        A[Bank Statement CSV] -->|PapaParse & Zod| V1[Bank Record Ingestion]
-        B[Razorpay Settlement CSV] -->|PapaParse & Zod| V2[Settlement Report Ingestion]
-        C[Internal ERP Sales Orders] -->|PapaParse & Zod| V3[Ledger Order Ingestion]
+        A["Bank Statement CSV"] -->|"PapaParse & Zod"| V1["Bank Record Ingestion"]
+        B["Razorpay Settlement CSV"] -->|"PapaParse & Zod"| V2["Settlement Report Ingestion"]
+        C["Internal ERP Sales Orders"] -->|"PapaParse & Zod"| V3["Ledger Order Ingestion"]
     end
 
     subgraph ENGINE ["2. 3-Level Settlement Unpacking Engine"]
-        V1 & V2 --> L0[Level 0: Bank Credit ↔ Settlement Match<br/>Exact UTR + Net Amount + T+2 Window]
-        L0 --> L1{Level 1: Batch Integrity Gate<br/>Gross - MDR - GST - Refunds == Net Deposit?}
-        L1 -->|Imbalanced Batch| EX1[Quarantine 'batch_imbalance' Exception<br/>Halt Cascading Errors]
-        L1 -->|Balanced Batch| L2[Level 2: Order-Level Unpacking<br/>Gross - 2% MDR - 18% GST = Net]
-        L2 & V3 --> MAT[Level 2 Order Matches & Tax Isolation]
+        V1 & V2 --> L0["Level 0: Bank Credit ↔ Settlement Match<br/>Exact UTR + Net Amount + T+2 Window"]
+        L0 --> L1{"Level 1: Batch Integrity Gate<br/>Gross - MDR - GST - Refunds == Net Deposit?"}
+        L1 -->|"Imbalanced Batch"| EX1["Quarantine batch_imbalance Exception<br/>Halt Cascading Errors"]
+        L1 -->|"Balanced Batch"| L2["Level 2: Order-Level Unpacking<br/>Gross - 2% MDR - 18% GST = Net"]
+        L2 & V3 --> MAT["Level 2 Order Matches & Tax Isolation"]
     end
 
     subgraph REASONING ["3. Claude 3.5 Sonnet Forensic AI"]
-        MAT & EX1 --> P3[Pass 3 Exception Reasoner<br/>Bounded 10-Item Batching]
-        P3 --> HITL[HITL Draft Action Generation<br/>Vendor Emails & Journal Adjustments]
+        MAT & EX1 --> P3["Pass 3 Exception Reasoner<br/>Bounded 10-Item Batching"]
+        P3 --> HITL["HITL Draft Action Generation<br/>Vendor Emails & Journal Adjustments"]
     end
 
     subgraph INTERFACE ["4. Presentation & Audit Ledger"]
-        MAT --> DASH[Live Operations Workbench & Stepper]
-        EX1 --> EXQ[Exception Queue Grouped by Batch]
-        HITL --> DRAFT[Human Approval Desk (Accept/Reject)]
-        DASH --> AUDIT[(Immutable MongoDB SHA-256 Audit Log)]
-        AGENT[Conversational AI Auditor] -->|Scoped Read Tools| AUDIT
+        MAT --> DASH["Live Operations Workbench & Stepper"]
+        EX1 --> EXQ["Exception Queue Grouped by Batch"]
+        HITL --> DRAFT["Human Approval Desk (Accept/Reject)"]
+        DASH --> AUDIT[("Immutable MongoDB SHA-256 Audit Log")]
+        AGENT["Conversational AI Auditor"] -->|"Scoped Read Tools"| AUDIT
     end
 ```
 
