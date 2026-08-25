@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
+import mongoose from 'mongoose';
 import { CLAUDE_AGENT_TOOLS, executeAgentTool } from '../services/agentToolRouter.js';
 import Run from '../models/Run.js';
+import { MemoryStore } from '../services/memoryStore.js';
 
 const AGENT_SYSTEM_PROMPT = `You are ReconcileAI's Tier-3 Senior Forensic Financial Assistant.
 You have real-time read-only access to the active reconciliation database for this run via tool functions.
@@ -36,9 +38,21 @@ export async function streamAgentChat(req, res, next) {
   };
 
   try {
-    const run = await Run.findOne({ run_id }).lean();
+    let run = null;
+    try {
+      if (mongoose.connection.readyState === 1) {
+        run = await Run.findOne({ run_id }).lean();
+      }
+    } catch (e) {
+      console.warn('[Mongo Chat Run Find Warning]:', e.message);
+    }
+
     if (!run) {
-      sendEvent({ type: 'error', message: `Run "${run_id}" not found.` });
+      run = MemoryStore.getRun(run_id);
+    }
+
+    if (!run) {
+      sendEvent({ type: 'error', message: `Run "${run_id}" not found. Please initialize a run using 'Try with Benchmark Data' or 'Upload CSV'.` });
       sendEvent({ type: 'done' });
       return res.end();
     }
