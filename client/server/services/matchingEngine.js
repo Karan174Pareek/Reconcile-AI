@@ -640,7 +640,8 @@ export async function executeRun(runId, options = {}) {
   }
 
   if (!run) {
-    run = MemoryStore.getRun(runId);
+    const hydrated = await MemoryStore.ensureRunHydrated(runId);
+    run = hydrated?.run || MemoryStore.getRun(runId);
   }
 
   if (!run) {
