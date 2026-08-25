@@ -1,4 +1,5 @@
 import { computeTextSimilarity, dateDiffInDays } from '../utils/similarity.js';
+import { emitRunProgress } from '../sockets/runSocket.js';
 
 /**
  * Normalizes reference tokens for exact and UTR matching
@@ -643,8 +644,29 @@ export async function executeRun(runId, options = {}) {
   const settlementLineItems = await SettlementLineItem.find({ run_id: runId }).lean();
 
   if (settlementReports.length > 0 && settlementLineItems.length > 0) {
+    emitRunProgress(runId, {
+      stage: 'level0',
+      level: 0,
+      percentage: 15,
+      message: `Level 0 — correlating ${bankRecords.length} bank credits to settlement batches via UTR & net amount...`,
+    });
     const l0 = reconcileLevel0(bankRecords, settlementReports, { runId, ...options });
+
+    emitRunProgress(runId, {
+      stage: 'level1',
+      level: 1,
+      percentage: 30,
+      message: `Level 0 matched ${l0.matches.length}/${bankRecords.length} credits. Level 1 — verifying batch integrity (Σ line items == bank credit)...`,
+    });
     const l1 = reconcileLevel1(settlementReports, settlementLineItems, { runId, ...options });
+
+    const flaggedCount = l1.exceptions.filter((e) => e.category === 'batch_imbalance').length;
+    emitRunProgress(runId, {
+      stage: 'level2',
+      level: 2,
+      percentage: 45,
+      message: `Level 1: ${l1.matches.length} batches balanced, ${flaggedCount} flagged. Level 2 — unpacking ${settlementLineItems.length} orders (isolating 2% MDR + 18% GST)...`,
+    });
     const l2 = reconcileLevel2(settlementLineItems, ledgerRecords, l1.balancedSettlementIds, { runId, ...options });
 
     const allMatches = [...l0.matches, ...l1.matches, ...l2.matches];
@@ -674,27 +696,39 @@ export async function executeRun(runId, options = {}) {
     }
 
     const totalRecords = settlementLineItems.length;
-    const totalMatched = l2.matches.length;
-    const unresolved = totalRecords - totalMatched;
-    const matchRate = totalRecords > 0 ? Math.round((totalMatched / totalRecords) * 10000) / 100 : 0.0;
+    const level2Matched = l2.matches.length;
+    const level1Flagged = l1.exceptions.filter((e) => e.category === 'batch_imbalance').length;
+    const unresolved = Math.max(0, totalRecords - level2Matched);
+    const matchRate = totalRecords > 0 ? Math.round((level2Matched / totalRecords) * 10000) / 100 : 0.0;
 
+    // Headline metrics use the line-item universe so that
+    // pass1_matched + pass2_matched + pass3_matched + unresolved === total_records.
     run.total_records = totalRecords;
-    run.pass1_matched = l0.matches.length + l1.matches.length;
-    run.pass2_matched = l2.matches.length;
-    run.pass3_matched = 0;
+    run.pass1_matched = level2Matched; // deterministic Level 2 order matches
+    run.pass2_matched = 0; // no separate fuzzy stage for settlement line items
+    run.pass3_matched = 0; // populated later by Pass 3 (executePass3)
     run.unresolved = unresolved;
     run.match_rate = matchRate;
-    run.status = 'processing';
+    // Batch-level 3-level engine stats (distinct universe from line items).
+    run.level0_total = bankRecords.length;
+    run.level0_matched = l0.matches.length;
+    run.level1_balanced = l1.matches.length;
+    run.level1_flagged = level1Flagged;
+    run.level2_matched = level2Matched;
+    run.status = 'running'; // deterministic passes done; Pass 3 AI reasoning still pending
     await run.save();
 
     return {
       run_id: runId,
       status: run.status,
+      mode: 'settlement',
       stats: {
         total_records: totalRecords,
         level0_matched: l0.matches.length,
-        level1_verified: l1.matches.length,
-        level2_unpacked: l2.matches.length,
+        level0_total: bankRecords.length,
+        level1_balanced: l1.matches.length,
+        level1_flagged: level1Flagged,
+        level2_matched: level2Matched,
         pass1_matched: run.pass1_matched,
         pass2_matched: run.pass2_matched,
         pass3_matched: 0,
@@ -727,7 +761,7 @@ export async function executeRun(runId, options = {}) {
   run.pass3_matched = 0;
   run.unresolved = unresolved;
   run.match_rate = matchRate;
-  run.status = 'processing';
+  run.status = 'running'; // deterministic passes done; Pass 3 AI reasoning still pending
   await run.save();
 
   return {

@@ -51,12 +51,12 @@ export default function UploadView({ isOpen, onClose, onRunCreated }) {
       }
       setTimeout(() => {
         onClose();
-      }, 1500);
+      }, 1200);
     } catch (err) {
       console.error('[Upload Error]:', err);
       const resError = err.response?.data?.error;
       setErrorDetails({
-        message: resError?.message || 'Failed to upload and validate CSVs',
+        message: resError?.message || 'Failed to upload and validate CSV files',
         details: resError?.details,
       });
     } finally {
@@ -77,7 +77,7 @@ export default function UploadView({ isOpen, onClose, onRunCreated }) {
       }
       setTimeout(() => {
         onClose();
-      }, 1500);
+      }, 1200);
     } catch (err) {
       console.error('[Seed Error]:', err);
       setErrorDetails({
@@ -89,41 +89,41 @@ export default function UploadView({ isOpen, onClose, onRunCreated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="glass-panel border border-white/15 rounded-2xl max-w-2xl w-full shadow-glass overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-[2px] animate-fadeIn">
+      <div className="bg-white border border-gray-200 rounded-xl max-w-2xl w-full shadow-modal overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.02]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div>
-            <h3 className="text-base font-semibold text-text-primary">Initialize Reconciliation Run</h3>
-            <p className="text-xs text-text-secondary">Upload CSV files or generate a synthetic benchmark batch</p>
+            <h3 className="text-base font-semibold text-gray-900">Initialize Reconciliation Run</h3>
+            <p className="text-xs text-gray-500">Upload CSV files or generate a 500-record benchmark batch</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors"
+            className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-5">
           {/* Success Banner */}
           {successMessage && (
-            <div className="flex items-center space-x-2.5 p-3.5 rounded-xl bg-teal-950/60 border border-teal-500/30 text-teal-300 text-xs font-mono">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-400" />
+            <div className="flex items-center space-x-2.5 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
               <span>{successMessage}</span>
             </div>
           )}
 
           {/* Error Banner */}
           {errorDetails && (
-            <div className="p-3.5 rounded-xl bg-coral-950/60 border border-coral-500/40 text-coral-300 text-xs space-y-2">
-              <div className="flex items-center space-x-2 font-medium">
-                <AlertCircle className="h-4 w-4 shrink-0 text-coral-400" />
+            <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-2">
+              <div className="flex items-center space-x-2 font-semibold">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
                 <span>{errorDetails.message}</span>
               </div>
               {errorDetails.details && (
-                <div className="max-h-36 overflow-y-auto font-mono text-[11px] bg-black/40 p-2.5 rounded-lg space-y-1 text-coral-300/90">
+                <div className="max-h-36 overflow-y-auto font-mono text-[11px] bg-white p-2.5 rounded border border-rose-200 space-y-1 text-rose-900">
                   {errorDetails.details.bank_errors?.map((be, i) => (
                     <div key={`be-${i}`}>
                       • Bank Row {be.row}: [{be.field}] {be.message} (received: "{String(be.received)}")
@@ -140,29 +140,29 @@ export default function UploadView({ isOpen, onClose, onRunCreated }) {
           )}
 
           {/* Seed Quick Option */}
-          <div className="p-4 rounded-xl glass-panel-subtle border border-amber-500/20 bg-amber-500/[0.03] flex items-center justify-between">
+          <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-0.5">
               <div className="flex items-center space-x-2">
-                <Zap className="h-4 w-4 text-amber-400" />
-                <span className="text-xs font-semibold text-text-primary">One-Click Benchmark Dataset</span>
+                <Zap className="h-4 w-4 text-blue-600" />
+                <span className="text-xs font-semibold text-gray-900">One-Click Benchmark Dataset</span>
               </div>
-              <p className="text-[11px] text-text-secondary">
-                Populates 500 paired B2B transactions with realistic exact matches, timing lag, duplicates, and refunds.
+              <p className="text-xs text-gray-600">
+                Instantly loads 500 paired B2B transactions with realistic exact matches, timing lag, duplicates, and refunds.
               </p>
             </div>
             <button
               onClick={handleGenerateSeed}
               disabled={isGeneratingSeed || isUploading}
-              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-navy-950 text-xs font-semibold shadow-glow-amber transition-all active:scale-98 disabled:opacity-50"
+              className="btn-primary text-xs py-2 px-3.5 whitespace-nowrap self-start sm:self-auto shadow-sm"
             >
               {isGeneratingSeed ? (
                 <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-navy-950" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
                   <span>Generating...</span>
                 </>
               ) : (
                 <>
-                  <span>Generate Seed</span>
+                  <span>Load Benchmark Data</span>
                   <ArrowRight className="h-3.5 w-3.5" />
                 </>
               )}
@@ -170,15 +170,15 @@ export default function UploadView({ isOpen, onClose, onRunCreated }) {
           </div>
 
           <div className="relative flex items-center justify-center">
-            <div className="border-t border-white/10 w-full" />
-            <span className="bg-navy-950 px-3 text-[11px] font-mono text-text-muted uppercase">Or upload CSVs</span>
+            <div className="border-t border-gray-200 w-full" />
+            <span className="bg-white px-3 text-xs font-semibold text-gray-400 uppercase">Or upload CSVs</span>
           </div>
 
-          {/* Drag and Drop Form */}
+          {/* Upload Form */}
           <form onSubmit={handleFileUpload} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               {/* Bank CSV Box */}
-              <div className="border-2 border-dashed border-white/10 hover:border-teal-500/50 hover:bg-teal-500/[0.02] rounded-xl p-4 text-center transition-all bg-white/[0.02]">
+              <div className="border-2 border-dashed border-gray-200 hover:border-blue-500 hover:bg-blue-50/30 rounded-xl p-4 text-center transition-colors bg-gray-50/50">
                 <input
                   type="file"
                   id="bank-file"
@@ -187,20 +187,20 @@ export default function UploadView({ isOpen, onClose, onRunCreated }) {
                   className="hidden"
                 />
                 <label htmlFor="bank-file" className="cursor-pointer block space-y-2">
-                  <div className="h-10 w-10 mx-auto rounded-lg bg-white/5 flex items-center justify-center text-text-secondary">
-                    <FileSpreadsheet className="h-5 w-5 text-teal-400" />
+                  <div className="h-10 w-10 mx-auto rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-600 shadow-sm">
+                    <FileSpreadsheet className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-text-primary">
+                    <p className="text-xs font-medium text-gray-900">
                       {bankFile ? bankFile.name : 'Bank Statement CSV'}
                     </p>
-                    <p className="text-[10px] text-text-muted font-mono">Required: date, amount, utr_ref, narration</p>
+                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">Required: date, amount, utr_ref, narration</p>
                   </div>
                 </label>
               </div>
 
               {/* Ledger CSV Box */}
-              <div className="border-2 border-dashed border-white/10 hover:border-teal-500/50 hover:bg-teal-500/[0.02] rounded-xl p-4 text-center transition-all bg-white/[0.02]">
+              <div className="border-2 border-dashed border-gray-200 hover:border-blue-500 hover:bg-blue-50/30 rounded-xl p-4 text-center transition-colors bg-gray-50/50">
                 <input
                   type="file"
                   id="ledger-file"
@@ -209,29 +209,29 @@ export default function UploadView({ isOpen, onClose, onRunCreated }) {
                   className="hidden"
                 />
                 <label htmlFor="ledger-file" className="cursor-pointer block space-y-2">
-                  <div className="h-10 w-10 mx-auto rounded-lg bg-white/5 flex items-center justify-center text-text-secondary">
-                    <FileSpreadsheet className="h-5 w-5 text-teal-400" />
+                  <div className="h-10 w-10 mx-auto rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-600 shadow-sm">
+                    <FileSpreadsheet className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-text-primary">
+                    <p className="text-xs font-medium text-gray-900">
                       {ledgerFile ? ledgerFile.name : 'Internal Ledger CSV'}
                     </p>
-                    <p className="text-[10px] text-text-muted font-mono">Required: date, amount, invoice_ref, payee</p>
+                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">Required: date, amount, invoice_ref, payee</p>
                   </div>
                 </label>
               </div>
             </div>
 
             {/* Submit Button */}
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end pt-1">
               <button
                 type="submit"
                 disabled={isUploading || isGeneratingSeed || !bankFile || !ledgerFile}
-                className="flex items-center space-x-2 px-5 py-2.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-navy-950 text-xs font-semibold shadow-glow-teal transition-all active:scale-98 disabled:opacity-50"
+                className="btn-primary text-xs py-2 px-4 shadow-sm"
               >
                 {isUploading ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin text-navy-950" />
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
                     <span>Validating & Parsing...</span>
                   </>
                 ) : (

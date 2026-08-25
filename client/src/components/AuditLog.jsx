@@ -23,17 +23,17 @@ const ACTOR_BADGES = {
   claude: {
     label: 'Claude AI',
     icon: Bot,
-    style: 'bg-amber-950/60 text-amber-400 border-amber-500/30',
+    style: 'bg-amber-50 text-amber-700 border-amber-200',
   },
   system: {
     label: 'System Engine',
     icon: Cpu,
-    style: 'bg-teal-950/60 text-teal-400 border-teal-500/30',
+    style: 'bg-blue-50 text-blue-700 border-blue-200',
   },
   default: {
     label: 'Auditor',
     icon: User,
-    style: 'bg-white/5 text-text-primary border-white/10',
+    style: 'bg-gray-100 text-gray-700 border-gray-200',
   },
 };
 
@@ -82,160 +82,141 @@ export default function AuditLog({ runId }) {
   });
 
   return (
-    <div className="glass-panel rounded-2xl shadow-glass overflow-hidden animate-fadeIn">
-      {/* Header */}
-      <div className="p-5 border-b border-white/10 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center space-x-2.5">
-              <div className="flex items-center space-x-1.5 text-teal-400">
-                <Shield className="h-4 w-4" />
-                <h3 className="text-base font-semibold text-text-primary tracking-tight">Append-Only Audit Trail</h3>
-              </div>
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-white/5 text-text-secondary border border-white/10">
-                {filteredLogs.length} events
-              </span>
-              <span className="text-[10px] font-mono flex items-center space-x-1 px-2 py-0.5 rounded-md bg-teal-950/60 text-teal-400 border border-teal-500/30">
-                <Lock className="h-2.5 w-2.5" />
-                <span>IMMUTABLE</span>
-              </span>
-            </div>
-            <p className="text-xs text-text-secondary mt-0.5">
-              Cryptographically timestamped and immutable log of AI decisions, tool executions, and auditor actions
-            </p>
-          </div>
-
-          {/* Search */}
-          <div className="relative w-full sm:w-64">
-            <Search className="h-4 w-4 absolute left-3 top-2.5 text-text-muted" />
-            <input
-              type="text"
-              placeholder="Search action or ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 text-text-primary text-xs rounded-lg pl-9 pr-3 py-2 placeholder-text-muted font-mono focus:outline-none focus:ring-1 focus:ring-teal-500/50 focus:border-teal-500"
-            />
-          </div>
+    <div className="space-y-4 animate-fadeIn">
+      {/* Screen Title & Subtitle */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 tracking-tight">Audit Trail & Event History</h2>
+          <p className="text-xs text-gray-500">
+            Complete, chronological history of every reconciliation pass, AI diagnosis, and human approval.
+          </p>
         </div>
-
-        {/* Filter Controls */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-          <span className="text-[11px] font-medium text-text-secondary flex items-center space-x-1 mr-1">
-            <Filter className="h-3 w-3 text-text-muted" />
-            <span>Target:</span>
+        <div className="flex items-center space-x-2">
+          <span className="badge-gray text-[11px] font-mono">
+            {filteredLogs.length} events logged
           </span>
-
-          {['all', 'match', 'exception', 'draft_action', 'agent_query'].map((type) => (
-            <button
-              key={type}
-              onClick={() => setTargetTypeFilter(type)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium capitalize transition-all ${
-                targetTypeFilter === type
-                  ? 'bg-teal-500 text-navy-950 font-semibold shadow-sm'
-                  : 'bg-white/5 text-text-secondary hover:text-text-primary hover:bg-white/10 border border-white/5'
-              }`}
-            >
-              {type.replace('_', ' ')}
-            </button>
-          ))}
-
-          <div className="h-4 w-px bg-white/10 mx-1 hidden sm:block" />
-
-          <span className="text-[11px] font-medium text-text-secondary mr-1 hidden sm:inline">Actor:</span>
-          {['all', 'claude', 'system'].map((act) => (
-            <button
-              key={act}
-              onClick={() => setActorFilter(act)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium capitalize transition-all ${
-                actorFilter === act
-                  ? 'bg-teal-500 text-navy-950 font-semibold shadow-sm'
-                  : 'bg-white/5 text-text-secondary hover:text-text-primary hover:bg-white/10 border border-white/5'
-              }`}
-            >
-              {act}
-            </button>
-          ))}
+          <span className="badge-emerald text-[10px] font-mono">
+            <Lock className="h-2.5 w-2.5" />
+            <span>IMMUTABLE</span>
+          </span>
         </div>
       </div>
 
-      {/* Table / Timeline List */}
-      {loading ? (
-        <div className="p-12 flex flex-col items-center justify-center space-y-3">
-          <Loader2 className="h-6 w-6 text-teal-400 animate-spin" />
-          <p className="text-xs text-text-secondary font-mono">Loading audit records...</p>
-        </div>
-      ) : filteredLogs.length === 0 ? (
-        <div className="p-12 text-center space-y-2">
-          <Shield className="h-8 w-8 text-text-muted mx-auto" />
-          <h4 className="text-sm font-semibold text-text-primary">No Audit Events Logged</h4>
-          <p className="text-xs text-text-secondary">Events from AI passes, tool queries, and approvals will appear here.</p>
-        </div>
-      ) : (
-        <div className="divide-y divide-white/5 font-mono text-xs">
-          {filteredLogs.map((log) => {
-            const isExpanded = expandedLogId === log._id;
-            const actorKey = log.actor?.toLowerCase()?.includes('claude')
-              ? 'claude'
-              : log.actor?.toLowerCase() === 'system'
-              ? 'system'
-              : 'default';
-            const actorMeta = ACTOR_BADGES[actorKey];
-            const ActorIcon = actorMeta.icon;
-
-            return (
-              <div key={log._id} className="p-4 hover:bg-white/[0.02] transition-colors space-y-2">
-                <div
-                  onClick={() => toggleExpand(log._id)}
-                  className="flex items-center justify-between cursor-pointer select-none"
+      <div className="card-base bg-white border border-gray-200 shadow-sm overflow-hidden">
+        {/* Filter Controls Header */}
+        <div className="p-4 border-b border-gray-200 space-y-3 bg-gray-50/50">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Target Filter Pills */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-medium text-gray-500 mr-1">Filter:</span>
+              {['all', 'match', 'exception', 'draft_action', 'agent_query'].map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setTargetTypeFilter(type)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize transition-colors cursor-pointer ${
+                    targetTypeFilter === type
+                      ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                  }`}
                 >
-                  <div className="flex items-center space-x-3">
-                    <button className="text-text-muted hover:text-text-primary">
-                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </button>
+                  {type.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
 
-                    {/* Actor Badge */}
-                    <span className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-md border text-[11px] font-semibold ${actorMeta.style}`}>
-                      <ActorIcon className="h-3 w-3" />
-                      <span>{log.actor}</span>
-                    </span>
-
-                    {/* Action Name */}
-                    <span className="font-semibold text-text-primary">{log.action}</span>
-
-                    {/* Target Type Tag */}
-                    <span className="text-[10px] bg-white/5 text-text-muted px-2 py-0.5 rounded border border-white/5 uppercase">
-                      {log.target_type}
-                    </span>
-
-                    {/* Target ID if present */}
-                    {log.target_id && (
-                      <span className="text-[11px] text-teal-400 font-medium hidden sm:inline font-mono">
-                        ID: {log.target_id}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Monospace Timestamp */}
-                  <div className="flex items-center space-x-1.5 text-[11px] text-text-secondary font-mono">
-                    <Clock className="h-3 w-3 text-text-muted" />
-                    <span>{new Date(log.timestamp).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {/* Expandable JSON Details with Refined Styling */}
-                {isExpanded && (
-                  <div className="mt-2 ml-7 glass-panel-subtle border border-white/5 rounded-xl p-3.5 space-y-1.5 animate-fadeIn">
-                    <div className="text-[10px] text-text-muted uppercase font-mono font-semibold">Event Payload Details:</div>
-                    <pre className="text-[11px] text-teal-300/90 whitespace-pre-wrap overflow-x-auto font-mono">
-                      {JSON.stringify(log.details || {}, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+            {/* Search Box */}
+            <div className="relative w-full sm:w-64">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search action or ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white border border-gray-200 text-gray-900 text-xs rounded-lg pl-9 pr-3 py-1.5 placeholder-gray-400 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
         </div>
-      )}
+
+        {/* Log Entries List */}
+        {loading ? (
+          <div className="p-12 flex flex-col items-center justify-center space-y-3">
+            <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
+            <p className="text-xs text-gray-500 font-mono">Loading audit logs...</p>
+          </div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="p-12 text-center space-y-2">
+            <Shield className="h-8 w-8 text-gray-400 mx-auto" />
+            <h4 className="text-sm font-semibold text-gray-900">No Audit Events Found</h4>
+            <p className="text-xs text-gray-500">Events from reconciliation runs and approvals will appear here.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200 font-mono text-xs">
+            {filteredLogs.map((log) => {
+              const isExpanded = expandedLogId === log._id;
+              const actorKey = log.actor?.toLowerCase()?.includes('claude')
+                ? 'claude'
+                : log.actor?.toLowerCase() === 'system'
+                ? 'system'
+                : 'default';
+              const actorMeta = ACTOR_BADGES[actorKey];
+              const ActorIcon = actorMeta.icon;
+
+              return (
+                <div key={log._id} className="p-4 hover:bg-gray-50/50 transition-colors space-y-2">
+                  <div
+                    onClick={() => toggleExpand(log._id)}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 cursor-pointer select-none"
+                  >
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button className="text-gray-400 hover:text-gray-700">
+                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </button>
+
+                      {/* Actor Badge */}
+                      <span className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full border text-[11px] font-semibold ${actorMeta.style}`}>
+                        <ActorIcon className="h-3 w-3" />
+                        <span>{log.actor}</span>
+                      </span>
+
+                      {/* Action Name */}
+                      <span className="font-semibold text-gray-900">{log.action}</span>
+
+                      {/* Target Type Tag */}
+                      <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200 uppercase font-mono">
+                        {log.target_type}
+                      </span>
+
+                      {/* Target ID if present */}
+                      {log.target_id && (
+                        <span className="text-[11px] text-blue-600 font-medium font-mono">
+                          ID: {log.target_id}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Timestamp */}
+                    <div className="flex items-center space-x-1.5 text-xs text-gray-500 font-mono self-start sm:self-auto">
+                      <Clock className="h-3 w-3 text-gray-400" />
+                      <span>{new Date(log.timestamp).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Expandable JSON Details */}
+                  {isExpanded && (
+                    <div className="mt-2 ml-6 rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-1.5">
+                      <div className="text-[10px] text-gray-500 uppercase font-mono font-semibold">Event Payload Details:</div>
+                      <pre className="text-xs text-gray-800 whitespace-pre-wrap overflow-x-auto font-mono bg-white p-2.5 rounded border border-gray-200">
+                        {JSON.stringify(log.details || {}, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

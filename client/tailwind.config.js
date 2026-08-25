@@ -7,57 +7,34 @@ export default {
   theme: {
     extend: {
       colors: {
-        base: {
-          dark: '#0B1220',
-          card: 'rgba(255, 255, 255, 0.05)',
-          border: 'rgba(255, 255, 255, 0.09)',
+        brand: {
+          50: '#EFF6FF',
+          100: '#DBEAFE',
+          200: '#BFDBFE',
+          500: '#3B82F6',
+          600: '#2563EB',
+          700: '#1D4ED8',
+          800: '#1E40AF',
+          900: '#1E3A8A',
         },
-        text: {
-          primary: '#F3F5F4',
-          secondary: '#94A3A0',
-          muted: '#637370',
+        surface: {
+          DEFAULT: '#FFFFFF',
+          muted: '#F9FAFB',
+          subtle: '#F3F4F6',
+          border: '#E5E7EB',
         },
-        teal: {
-          400: '#2DD4A8',
-          500: '#20B991',
-          600: '#149574',
-          900: '#0F5C4C',
-          950: '#073027',
-        },
-        amber: {
-          400: '#F2BD69',
-          500: '#E8A94A',
-          600: '#C9892E',
-          900: '#8A5A1F',
-          950: '#3D2409',
-        },
-        coral: {
-          400: '#F08B82',
-          500: '#E8746A',
-          600: '#C7574D',
-          900: '#6E2520',
-          950: '#3D120F',
-        },
-        navy: {
-          800: '#1E293B',
-          850: '#151F33',
-          900: '#0F172A',
-          950: '#0B1220',
-        }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
-      },
-      borderRadius: {
-        'panel': '18px',
-        'element': '8px',
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       boxShadow: {
-        'glass': 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 20px 40px -15px rgba(0, 0, 0, 0.5)',
-        'glass-sm': 'inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 16px -4px rgba(0, 0, 0, 0.35)',
-        'glow-teal': '0 0 24px -4px rgba(45, 212, 168, 0.25)',
-        'glow-amber': '0 0 24px -4px rgba(232, 169, 74, 0.25)',
+        'card': '0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04)',
+        'dropdown': '0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04)',
+        'modal': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.06)',
+      },
+      borderRadius: {
+        'card': '12px',
       }
     },
   },

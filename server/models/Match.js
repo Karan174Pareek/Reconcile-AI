@@ -40,7 +40,7 @@ const MatchSchema = new mongoose.Schema(
     },
     method: {
       type: String,
-      enum: ['exact', 'fuzzy', 'ai', 'batch_integrity'],
+      enum: ['exact', 'fuzzy', 'ai', 'heuristic', 'batch_integrity'],
       required: true,
       index: true,
     },

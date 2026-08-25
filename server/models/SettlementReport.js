@@ -10,7 +10,6 @@ const SettlementReportSchema = new mongoose.Schema(
     settlement_id: {
       type: String,
       required: true,
-      unique: true,
       index: true,
     },
     amount: {
@@ -78,6 +77,7 @@ const SettlementReportSchema = new mongoose.Schema(
   }
 );
 
+SettlementReportSchema.index({ run_id: 1, settlement_id: 1 }, { unique: true });
 SettlementReportSchema.index({ run_id: 1, settled_at: 1 });
 SettlementReportSchema.index({ run_id: 1, utr: 1 });
 

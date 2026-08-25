@@ -58,21 +58,27 @@ export async function reconcileAllHandler(req, res, next) {
       });
     }
 
-    // 1. Stage 1: Deterministic Matching (Pass 1 & Pass 2)
+    // 1. Stage 1: Deterministic Matching (3-level settlement engine / Pass 1 & 2)
     emitRunProgress(run_id, {
-      stage: 'pass1_pass2',
+      stage: 'deterministic_start',
       pass: 1,
-      percentage: 20,
-      message: 'Running Pass 1 Exact Matching & Pass 2 Fuzzy Heuristics...',
+      percentage: 10,
+      message: 'Starting deterministic reconciliation engine...',
     });
 
     const pass1And2Result = await executeRun(run_id);
 
+    const detStats = pass1And2Result.stats || {};
+    const detMessage =
+      pass1And2Result.mode === 'settlement'
+        ? `3-level engine complete: Level 0 matched ${detStats.level0_matched}/${detStats.level0_total} credits, Level 1 ${detStats.level1_balanced} balanced (${detStats.level1_flagged} flagged), Level 2 unpacked ${detStats.level2_matched}/${detStats.total_records} orders.`
+        : `Pass 1 & 2 complete: ${detStats.pass1_matched} exact, ${detStats.pass2_matched} fuzzy matches.`;
+
     emitPassComplete(run_id, {
       pass: 2,
       percentage: 60,
-      stats: pass1And2Result.stats,
-      message: `Pass 1 & 2 complete: ${pass1And2Result.stats.pass1_matched} exact, ${pass1And2Result.stats.pass2_matched} fuzzy matches.`,
+      stats: detStats,
+      message: detMessage,
     });
 
     // 2. Stage 2: Claude AI Exception Reasoning (Pass 3)

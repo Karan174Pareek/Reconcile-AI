@@ -80,7 +80,7 @@ export function findCandidatesForBankRecord(targetRecord, ledgerRecords, maxCand
  * Calls Claude API with retry and validation for Pass 3 batch reasoning.
  */
 export async function executePass3BatchCall(client, batchItems, options = {}) {
-  const model = options.model || process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
+  const model = options.model || process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022';
   const temperature = options.temperature ?? 0.2;
 
   if (!client) {
@@ -250,9 +250,9 @@ export async function generateDraftActionContent(client, exceptionRecord, target
   const prompt = buildDraftActionUserPrompt(exceptionRecord, targetRecord);
   try {
     const response = await client.messages.create({
-      model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+      model: process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022',
       max_tokens: 1000,
-      temperature,
+      temperature: 0.3,
       system: DRAFT_ACTION_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -279,6 +279,19 @@ export async function executePass3(runId, options = {}) {
   }
 
   const client = getAnthropicClient(options.client);
+  const aiMode = client ? 'live' : 'fallback';
+
+  if (!client) {
+    console.warn(
+      '\n[Pass 3] ⚠  No ANTHROPIC_API_KEY (or CLAUDE_API_KEY) configured.\n' +
+        '        Pass 3 is running in DETERMINISTIC HEURISTIC FALLBACK mode — the\n' +
+        '        rationales and draft actions below are rule-based estimates, NOT live\n' +
+        '        Claude reasoning. Set ANTHROPIC_API_KEY in server/.env to enable live AI.\n'
+    );
+  } else {
+    console.log(`[Pass 3] Live Claude reasoning enabled (model: ${process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022'}).`);
+  }
+  const matchMethod = client ? 'ai' : 'heuristic';
 
   // Check if run has settlement line items
   const lineItemCount = await SettlementLineItem.countDocuments({ run_id: runId });
@@ -296,8 +309,16 @@ export async function executePass3(runId, options = {}) {
     }).lean();
 
     if (pendingLineItems.length === 0) {
+      run.ai_mode = aiMode;
+      if (run.status !== 'complete') {
+        run.status = 'complete';
+        run.completed_at = run.completed_at || new Date();
+      }
+      await run.save();
       return {
         run_id: runId,
+        status: run.status,
+        ai_mode: aiMode,
         message: 'All settlement line items already unpacked and reconciled.',
         pass3_matched: 0,
         unresolved: run.unresolved,
@@ -351,7 +372,7 @@ export async function executePass3(runId, options = {}) {
               payment_id: li?.payment_id || evalItem.payment_id,
               order_id: li?.order_id || evalItem.order_id,
               ledger_record_id: evalItem.match_ledger_id,
-              method: 'ai',
+              method: matchMethod,
               confidence: evalItem.confidence || 0.90,
               rationale: evalItem.rationale || 'Pass 3 Claude Settlement Variance Reasoner confirmed match',
               variance_category: evalItem.category || 'mdr_fee',
@@ -462,8 +483,10 @@ export async function executePass3(runId, options = {}) {
     const matchRate = totalLineItems > 0 ? Math.round((totalMatched / totalLineItems) * 10000) / 100 : 0.0;
 
     run.pass3_matched = pass3MatchesCount;
+    run.level2_matched = totalMatched;
     run.unresolved = unresolved;
     run.match_rate = matchRate;
+    run.ai_mode = aiMode;
     run.status = 'complete';
     run.completed_at = new Date();
     await run.save();
@@ -471,6 +494,7 @@ export async function executePass3(runId, options = {}) {
     return {
       run_id: runId,
       status: run.status,
+      ai_mode: aiMode,
       pass3_matched: pass3MatchesCount,
       total_matched: totalMatched,
       unresolved,
@@ -491,8 +515,16 @@ export async function executePass3(runId, options = {}) {
   }).lean();
 
   if (unmatchedBankRecords.length === 0) {
+    run.ai_mode = aiMode;
+    if (run.status !== 'complete') {
+      run.status = 'complete';
+      run.completed_at = run.completed_at || new Date();
+    }
+    await run.save();
     return {
       run_id: runId,
+      status: run.status,
+      ai_mode: aiMode,
       message: 'No unmatched bank records to evaluate in Pass 3',
       pass3_matched: 0,
       unresolved: run.unresolved,
@@ -538,7 +570,7 @@ export async function executePass3(runId, options = {}) {
             level: 2,
             bank_record_id: bank.id,
             ledger_record_id: evalItem.match_ledger_id,
-            method: 'ai',
+            method: matchMethod,
             confidence: evalItem.confidence || 0.85,
             rationale: evalItem.rationale || 'Pass 3 Claude reasoning confirmed match',
             created_at: new Date(),
@@ -621,6 +653,7 @@ export async function executePass3(runId, options = {}) {
   run.pass3_matched = pass3MatchesCount;
   run.unresolved = unresolved;
   run.match_rate = matchRate;
+  run.ai_mode = aiMode;
   run.status = 'complete';
   run.completed_at = new Date();
   await run.save();
@@ -628,6 +661,7 @@ export async function executePass3(runId, options = {}) {
   return {
     run_id: runId,
     status: run.status,
+    ai_mode: aiMode,
     pass1_matched: run.pass1_matched,
     pass2_matched: run.pass2_matched,
     pass3_matched: pass3MatchesCount,
