@@ -19,6 +19,11 @@ export default function LiveProgressStepper({
   onExecuteFullPipeline,
   isExecuting,
 }) {
+  const status = run?.status || 'pending';
+  const pass1Count = run?.pass1_matched || 0;
+  const pass2Count = run?.pass2_matched || 0;
+  const pass3Count = run?.pass3_matched || 0;
+
   const level0Matched = run?.level0_matched ?? (pass1Count > 0 ? 1 : 0);
   const level0Total = run?.level0_total ?? (run?.total_records ? Math.ceil(run.total_records / 30) : 0);
   const level1Balanced = run?.level1_balanced ?? 0;
