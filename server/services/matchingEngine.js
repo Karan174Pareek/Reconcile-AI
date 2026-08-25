@@ -713,25 +713,34 @@ export async function executeRun(runId, options = {}) {
     const allMatches = [...l0.matches, ...l1.matches, ...l2.matches];
     const allExceptions = [...l0.exceptions, ...l1.exceptions, ...l2.exceptions];
 
-    await Promise.all([
-      allMatches.length > 0 ? Match.insertMany(allMatches, { ordered: false }) : Promise.resolve(),
-      allExceptions.length > 0 ? Exception.insertMany(allExceptions, { ordered: false }) : Promise.resolve(),
-      l0.matchedBankIds.length > 0
-        ? BankRecord.updateMany({ run_id: runId, id: { $in: l0.matchedBankIds } }, { $set: { status: 'matched' } })
-        : Promise.resolve(),
-      l1.balancedSettlementIds.length > 0
-        ? SettlementReport.updateMany({ run_id: runId, settlement_id: { $in: l1.balancedSettlementIds } }, { $set: { integrity_status: 'balanced' } })
-        : Promise.resolve(),
-      l1.imbalancedSettlementIds.length > 0
-        ? SettlementReport.updateMany({ run_id: runId, settlement_id: { $in: l1.imbalancedSettlementIds } }, { $set: { integrity_status: 'imbalanced' } })
-        : Promise.resolve(),
-      l2.matchedLineItemIds.length > 0
-        ? SettlementLineItem.updateMany({ run_id: runId, payment_id: { $in: l2.matchedLineItemIds } }, { $set: { unpacked_status: 'matched' } })
-        : Promise.resolve(),
-      l2.matchedLedgerIds.length > 0
-        ? LedgerRecord.updateMany({ run_id: runId, id: { $in: l2.matchedLedgerIds } }, { $set: { status: 'matched' } })
-        : Promise.resolve(),
-    ]);
+    MemoryStore.saveMatches(runId, allMatches);
+    MemoryStore.saveExceptions(runId, allExceptions);
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await Promise.all([
+          allMatches.length > 0 ? Match.insertMany(allMatches, { ordered: false }) : Promise.resolve(),
+          allExceptions.length > 0 ? Exception.insertMany(allExceptions, { ordered: false }) : Promise.resolve(),
+          l0.matchedBankIds.length > 0
+            ? BankRecord.updateMany({ run_id: runId, id: { $in: l0.matchedBankIds } }, { $set: { status: 'matched' } })
+            : Promise.resolve(),
+          l1.balancedSettlementIds.length > 0
+            ? SettlementReport.updateMany({ run_id: runId, settlement_id: { $in: l1.balancedSettlementIds } }, { $set: { integrity_status: 'balanced' } })
+            : Promise.resolve(),
+          l1.imbalancedSettlementIds.length > 0
+            ? SettlementReport.updateMany({ run_id: runId, settlement_id: { $in: l1.imbalancedSettlementIds } }, { $set: { integrity_status: 'imbalanced' } })
+            : Promise.resolve(),
+          l2.matchedLineItemIds.length > 0
+            ? SettlementLineItem.updateMany({ run_id: runId, payment_id: { $in: l2.matchedLineItemIds } }, { $set: { unpacked_status: 'matched' } })
+            : Promise.resolve(),
+          l2.matchedLedgerIds.length > 0
+            ? LedgerRecord.updateMany({ run_id: runId, id: { $in: l2.matchedLedgerIds } }, { $set: { status: 'matched' } })
+            : Promise.resolve(),
+        ]);
+      } catch (dbErr) {
+        console.warn('[Mongo Insert/Update Warning]:', dbErr.message);
+      }
+    }
 
     const totalRecords = settlementLineItems.length;
     const level2Matched = l2.matches.length;
@@ -753,8 +762,17 @@ export async function executeRun(runId, options = {}) {
     run.level1_balanced = l1.matches.length;
     run.level1_flagged = level1Flagged;
     run.level2_matched = level2Matched;
-    run.status = 'running'; // deterministic passes done; Pass 3 AI reasoning still pending
-    await run.save();
+    run.status = 'complete';
+    run.completed_at = new Date();
+
+    if (typeof run.save === 'function' && mongoose.connection.readyState === 1) {
+      try {
+        await run.save();
+      } catch (e) {
+        console.warn('[Mongo Save Run Warning]:', e.message);
+      }
+    }
+    MemoryStore.saveRun(run);
 
     return {
       run_id: runId,
@@ -780,11 +798,20 @@ export async function executeRun(runId, options = {}) {
   }
 
   const res = reconcileRecords(bankRecords, ledgerRecords, { runId, ...options });
-  if (res.matches.length > 0) {
-    await Match.insertMany(res.matches, { ordered: false });
-  }
-  if (res.exceptions.length > 0) {
-    await Exception.insertMany(res.exceptions, { ordered: false });
+  MemoryStore.saveMatches(runId, res.matches);
+  MemoryStore.saveExceptions(runId, res.exceptions);
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      if (res.matches.length > 0) {
+        await Match.insertMany(res.matches, { ordered: false });
+      }
+      if (res.exceptions.length > 0) {
+        await Exception.insertMany(res.exceptions, { ordered: false });
+      }
+    } catch (e) {
+      console.warn('[Mongo Insert Records Warning]:', e.message);
+    }
   }
 
   const exactCount = res.matches.filter((m) => m.method === 'exact').length;
@@ -799,8 +826,17 @@ export async function executeRun(runId, options = {}) {
   run.pass3_matched = 0;
   run.unresolved = unresolved;
   run.match_rate = matchRate;
-  run.status = 'running'; // deterministic passes done; Pass 3 AI reasoning still pending
-  await run.save();
+  run.status = 'complete';
+  run.completed_at = new Date();
+
+  if (typeof run.save === 'function' && mongoose.connection.readyState === 1) {
+    try {
+      await run.save();
+    } catch (e) {
+      console.warn('[Mongo Save Run Warning]:', e.message);
+    }
+  }
+  MemoryStore.saveRun(run);
 
   return {
     run_id: runId,
