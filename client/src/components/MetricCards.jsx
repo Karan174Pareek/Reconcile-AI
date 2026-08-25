@@ -32,23 +32,14 @@ function AnimatedNumber({ value, isPercent = false, isCurrency = false, decimals
 }
 
 export default function MetricCards({ run }) {
-  if (!run) {
-    return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="card-base p-4 animate-pulse h-24 bg-white border border-gray-200" />
-        ))}
-      </div>
-    );
-  }
-
-  const total = run.total_records || 0;
-  const pass1 = run.pass1_matched || 0;
-  const pass2 = run.pass2_matched || 0;
-  const pass3 = run.pass3_matched || 0;
-  const unresolved = run.unresolved || 0;
-  const matchRate = run.match_rate || 0;
+  const total = run?.total_records || 0;
+  const pass1 = run?.pass1_matched || 0;
+  const pass2 = run?.pass2_matched || 0;
+  const pass3 = run?.pass3_matched || 0;
+  const unresolved = run?.unresolved || 0;
+  const matchRate = run?.match_rate || 0;
   const autoMatched = (total - unresolved > 0) ? (total - unresolved) : (pass1 + pass2);
+  const isPendingCreation = !run;
 
   const cards = [
     {
