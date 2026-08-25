@@ -48,7 +48,8 @@ export async function streamAgentChat(req, res, next) {
     }
 
     if (!run) {
-      run = MemoryStore.getRun(run_id);
+      const hydrated = await MemoryStore.ensureRunHydrated(run_id);
+      run = hydrated?.run || MemoryStore.getRun(run_id);
     }
 
     if (!run) {

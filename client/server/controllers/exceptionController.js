@@ -5,6 +5,7 @@ import LedgerRecord from '../models/LedgerRecord.js';
 import Match from '../models/Match.js';
 import AuditLog from '../models/AuditLog.js';
 import Run from '../models/Run.js';
+import { MemoryStore } from '../services/memoryStore.js';
 
 /**
  * Controller: Fetches exceptions for a given run with populated bank and candidate ledger details
@@ -19,7 +20,22 @@ export async function getRunExceptions(req, res, next) {
     if (category && category !== 'all') query.category = category;
     if (decision && decision !== 'all') query.human_decision = decision;
 
-    const exceptions = await Exception.find(query).sort({ created_at: -1 }).lean();
+    let exceptions = [];
+    try {
+      if (mongoose.connection.readyState === 1) {
+        exceptions = await Exception.find(query).sort({ created_at: -1 }).lean();
+      }
+    } catch (e) {
+      console.warn('[Mongo getRunExceptions Warning]:', e.message);
+    }
+
+    if (!exceptions || exceptions.length === 0) {
+      const hydrated = await MemoryStore.ensureRunHydrated(run_id);
+      let memExceptions = hydrated?.exceptions || MemoryStore.getExceptions(run_id);
+      if (category && category !== 'all') memExceptions = memExceptions.filter((e) => e.category === category);
+      if (decision && decision !== 'all') memExceptions = memExceptions.filter((e) => e.human_decision === decision);
+      exceptions = memExceptions;
+    }
 
     if (exceptions.length === 0) {
       return res.status(200).json({

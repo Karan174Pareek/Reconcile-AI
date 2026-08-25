@@ -160,10 +160,11 @@ export async function getRunDetails(req, res, next) {
     }
 
     if (!run) {
-      run = MemoryStore.getRun(run_id);
+      const hydrated = await MemoryStore.ensureRunHydrated(run_id);
+      run = hydrated?.run || MemoryStore.getRun(run_id);
       if (run) {
-        matchesCount = MemoryStore.getMatches(run_id).length;
-        exceptionsCount = MemoryStore.getExceptions(run_id).length;
+        matchesCount = (hydrated?.matches || MemoryStore.getMatches(run_id)).length;
+        exceptionsCount = (hydrated?.exceptions || MemoryStore.getExceptions(run_id)).length;
       }
     }
 
@@ -238,7 +239,8 @@ export async function listRunSettlements(req, res, next) {
     }
 
     if (!settlements || settlements.length === 0) {
-      settlements = MemoryStore.getSettlementReports(run_id);
+      const hydrated = await MemoryStore.ensureRunHydrated(run_id);
+      settlements = hydrated?.settlementReports || MemoryStore.getSettlementReports(run_id);
     }
 
     return res.status(200).json({
