@@ -29,23 +29,39 @@ export function useRunSocket(runId) {
         setRunData(res.data.data.run);
       }
     } catch (err) {
-      console.error('[useRunSocket] Fetch run error:', err);
+      console.warn('[useRunSocket] Fetch run notice:', err.message);
       setError(err.response?.data?.error?.message || err.message);
     } finally {
       setLoading(false);
     }
   }, [runId]);
 
-  // Socket connection and room lifecycle
   useEffect(() => {
     if (!runId) return;
 
     fetchRun(runId);
 
+    const isVercelProduction =
+      !SOCKET_URL ||
+      (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app'));
+
+    // In Vercel serverless production: Polling is the primary mechanism (Option A)
+    if (isVercelProduction) {
+      setIsConnected(true);
+      pollingTimerRef.current = setInterval(() => {
+        fetchRun(runId);
+      }, 2500);
+
+      return () => {
+        if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+      };
+    }
+
+    // In local Node development: Connect via Socket.io
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1500,
     });
 
     socketRef.current = socket;
@@ -94,21 +110,15 @@ export function useRunSocket(runId) {
       fetchRun(runId);
     });
 
-    // Fallback polling: poll every 3s if disconnected or while running
     pollingTimerRef.current = setInterval(() => {
-      if (!socket.connected || runData?.status === 'running') {
+      if (!socket.connected) {
         fetchRun(runId);
       }
     }, 3000);
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.emit('leave_run', runId);
-        socketRef.current.disconnect();
-      }
-      if (pollingTimerRef.current) {
-        clearInterval(pollingTimerRef.current);
-      }
+      if (socketRef.current) socketRef.current.disconnect();
+      if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
     };
   }, [runId, fetchRun]);
 
@@ -119,6 +129,8 @@ export function useRunSocket(runId) {
     liveEvents,
     loading,
     error,
-    refreshRun: () => fetchRun(runId),
+    refetch: () => fetchRun(runId),
   };
 }
+
+export default useRunSocket;

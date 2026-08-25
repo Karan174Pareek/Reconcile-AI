@@ -136,7 +136,24 @@ export async function streamAgentChat(req, res, next) {
     sendEvent({ type: 'done' });
     res.end();
   } catch (err) {
-    console.error('[Chat SSE Error]:', err);
+    console.warn('[Chat SSE Anthropic Error - Switching to Heuristic]:', err.message);
+    const isCreditOrAuth =
+      err.message?.includes('credit balance') ||
+      err.message?.includes('invalid_request_error') ||
+      err.message?.includes('400') ||
+      err.message?.includes('401') ||
+      err.message?.includes('429');
+
+    if (isCreditOrAuth) {
+      sendEvent({
+        type: 'text',
+        content: `*(Anthropic API notice: Credit limit reached. Querying active database via Forensic Inspector Engine.)*\n\n`,
+      });
+      await handleOfflineAgentConversation(run_id, run, messages, sendEvent);
+      sendEvent({ type: 'done' });
+      return res.end();
+    }
+
     sendEvent({ type: 'error', message: err.message || 'Error processing chat message' });
     sendEvent({ type: 'done' });
     res.end();

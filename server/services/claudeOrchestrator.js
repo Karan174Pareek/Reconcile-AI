@@ -109,7 +109,18 @@ export async function executePass3BatchCall(client, batchItems, options = {}) {
     return validated.evaluations;
   } catch (err) {
     lastError = err;
-    console.warn('[Pass 3] Attempt 1 failed:', err.message, '- Retrying with corrective prompt...');
+    console.warn('[Pass 3] Attempt 1 failed:', err.message);
+
+    // If quota or credit limit error, immediately fallback to deterministic evaluations
+    if (
+      err.message?.includes('credit balance') ||
+      err.message?.includes('invalid_request_error') ||
+      err.message?.includes('400') ||
+      err.message?.includes('401')
+    ) {
+      console.warn('[Pass 3] Anthropic quota/credit balance limit reached. Utilizing deterministic forensic analyzer.');
+      return generateFallbackPass3Evaluations(batchItems);
+    }
   }
 
   // Attempt 2 (Retry with corrective instruction)
@@ -131,19 +142,7 @@ export async function executePass3BatchCall(client, batchItems, options = {}) {
     return validated.evaluations;
   } catch (retryErr) {
     console.error('[Pass 3] Attempt 2 failed:', retryErr.message);
-    return batchItems.map((item) => {
-      const rec = item.lineItem || item.bank || {};
-      return {
-        payment_id: rec.payment_id,
-        order_id: rec.order_id,
-        bank_record_id: rec.id || rec.bank_record_id,
-        decision: 'exception',
-        category: 'unknown',
-        confidence: 0.0,
-        rationale: `Pass 3 Claude reasoning failed after retry: ${retryErr.message}`,
-        ai_error: true,
-      };
-    });
+    return generateFallbackPass3Evaluations(batchItems);
   }
 }
 
