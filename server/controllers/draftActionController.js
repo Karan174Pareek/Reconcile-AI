@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import DraftAction from '../models/DraftAction.js';
 import AuditLog from '../models/AuditLog.js';
 
@@ -34,9 +35,14 @@ export async function approveDraftAction(req, res, next) {
     const { id } = req.params;
     const { edited_content, user_email } = req.body;
 
-    const draft = await DraftAction.findOne({
-      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { exception_id: id }],
-    });
+    const conditions = [];
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      conditions.push({ _id: id });
+    }
+    conditions.push({ exception_id: id });
+    conditions.push({ id });
+
+    const draft = await DraftAction.findOne({ $or: conditions });
 
     if (!draft) {
       return res.status(404).json({
@@ -107,9 +113,14 @@ export async function rejectDraftAction(req, res, next) {
     const { id } = req.params;
     const { user_email, reason } = req.body;
 
-    const draft = await DraftAction.findOne({
-      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { exception_id: id }],
-    });
+    const conditions = [];
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      conditions.push({ _id: id });
+    }
+    conditions.push({ exception_id: id });
+    conditions.push({ id });
+
+    const draft = await DraftAction.findOne({ $or: conditions });
 
     if (!draft) {
       return res.status(404).json({

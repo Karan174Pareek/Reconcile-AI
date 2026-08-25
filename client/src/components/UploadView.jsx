@@ -13,7 +13,7 @@ import {
 
 const API_BASE = import.meta.env.VITE_SERVER_URL
   ? `${import.meta.env.VITE_SERVER_URL}/api`
-  : 'http://localhost:5000/api';
+  : '/api';
 
 export default function UploadView({ isOpen, onClose, onRunCreated }) {
   const [bankFile, setBankFile] = useState(null);

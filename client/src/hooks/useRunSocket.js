@@ -2,8 +2,10 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 
-const SOCKET_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:5000';
-const API_BASE = `${SOCKET_URL}/api`;
+const SOCKET_URL = import.meta.env.VITE_SERVER_URL || '';
+const API_BASE = import.meta.env.VITE_SERVER_URL
+  ? `${import.meta.env.VITE_SERVER_URL}/api`
+  : '/api';
 
 export function useRunSocket(runId) {
   const [runData, setRunData] = useState(null);

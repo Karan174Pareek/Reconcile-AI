@@ -1,8 +1,10 @@
+import mongoose from 'mongoose';
 import Exception from '../models/Exception.js';
 import BankRecord from '../models/BankRecord.js';
 import LedgerRecord from '../models/LedgerRecord.js';
 import Match from '../models/Match.js';
 import AuditLog from '../models/AuditLog.js';
+import Run from '../models/Run.js';
 
 /**
  * Controller: Fetches exceptions for a given run with populated bank and candidate ledger details
@@ -28,12 +30,12 @@ export async function getRunExceptions(req, res, next) {
     }
 
     // Collect bank record IDs and candidate ledger IDs
-    const bankIds = exceptions.map((e) => e.bank_record_id);
-    const candidateIds = Array.from(new Set(exceptions.flatMap((e) => e.candidate_ledger_ids || [])));
+    const bankIds = exceptions.map((e) => e.bank_record_id).filter(Boolean);
+    const candidateIds = Array.from(new Set(exceptions.flatMap((e) => e.candidate_ledger_ids || []))).filter(Boolean);
 
     const [bankRecords, candidateLedgers] = await Promise.all([
-      BankRecord.find({ run_id, id: { $in: bankIds } }).lean(),
-      LedgerRecord.find({ run_id, id: { $in: candidateIds } }).lean(),
+      bankIds.length > 0 ? BankRecord.find({ run_id, id: { $in: bankIds } }).lean() : [],
+      candidateIds.length > 0 ? LedgerRecord.find({ run_id, id: { $in: candidateIds } }).lean() : [],
     ]);
 
     const bankMap = new Map(bankRecords.map((b) => [b.id, b]));
@@ -42,7 +44,7 @@ export async function getRunExceptions(req, res, next) {
     // Attach populated records
     const populated = exceptions.map((exp) => ({
       ...exp,
-      bank_record: bankMap.get(exp.bank_record_id) || null,
+      bank_record: exp.bank_record_id ? bankMap.get(exp.bank_record_id) || null : null,
       candidate_ledgers: (exp.candidate_ledger_ids || []).map((id) => ledgerMap.get(id)).filter(Boolean),
     }));
 
@@ -75,9 +77,16 @@ export async function resolveException(req, res, next) {
       });
     }
 
-    const exception = await Exception.findOne({
-      $or: [{ id }, { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { bank_record_id: id }],
-    });
+    const conditions = [];
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      conditions.push({ _id: id });
+    }
+    conditions.push({ payment_id: id });
+    conditions.push({ order_id: id });
+    conditions.push({ bank_record_id: id });
+    conditions.push({ settlement_id: id });
+
+    const exception = await Exception.findOne({ $or: conditions });
 
     if (!exception) {
       return res.status(404).json({
@@ -108,10 +117,12 @@ export async function resolveException(req, res, next) {
       exception.manual_ledger_id = manual_ledger_id;
 
       // Update Bank & Ledger records to matched
-      await BankRecord.updateOne(
-        { run_id: exception.run_id, id: exception.bank_record_id },
-        { $set: { status: 'matched' } }
-      );
+      if (exception.bank_record_id) {
+        await BankRecord.updateOne(
+          { run_id: exception.run_id, id: exception.bank_record_id },
+          { $set: { status: 'matched' } }
+        );
+      }
       await LedgerRecord.updateOne(
         { run_id: exception.run_id, id: manual_ledger_id },
         { $set: { status: 'matched' } }
@@ -119,10 +130,10 @@ export async function resolveException(req, res, next) {
 
       // Create Match document
       await Match.findOneAndUpdate(
-        { run_id: exception.run_id, bank_record_id: exception.bank_record_id },
+        { run_id: exception.run_id, bank_record_id: exception.bank_record_id || exception.payment_id },
         {
           run_id: exception.run_id,
-          bank_record_id: exception.bank_record_id,
+          bank_record_id: exception.bank_record_id || exception.payment_id,
           ledger_record_id: manual_ledger_id,
           method: 'exact',
           confidence: 1.0,
@@ -135,13 +146,29 @@ export async function resolveException(req, res, next) {
 
     await exception.save();
 
+    // Update Run summary statistics
+    if (exception.run_id) {
+      const remainingUnresolved = await Exception.countDocuments({
+        run_id: exception.run_id,
+        human_decision: 'pending',
+      });
+      const run = await Run.findOne({ run_id: exception.run_id });
+      if (run) {
+        run.unresolved = remainingUnresolved;
+        const total = run.total_records || 1;
+        const matched = Math.max(0, total - remainingUnresolved);
+        run.match_rate = Math.min(100, Math.max(0, (matched / total) * 100));
+        await run.save();
+      }
+    }
+
     // Log to Audit Trail
     await AuditLog.create({
       run_id: exception.run_id,
       actor,
       action: `human_exception_${decision}`,
       target_type: 'exception',
-      target_id: exception.bank_record_id,
+      target_id: exception.bank_record_id || exception.payment_id || exception._id.toString(),
       details: {
         decision,
         manual_ledger_id: manual_ledger_id || null,

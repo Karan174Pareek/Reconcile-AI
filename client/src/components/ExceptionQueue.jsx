@@ -18,7 +18,7 @@ import SettlementDetailModal from './SettlementDetailModal.jsx';
 
 const API_BASE = import.meta.env.VITE_SERVER_URL
   ? `${import.meta.env.VITE_SERVER_URL}/api`
-  : 'http://localhost:5000/api';
+  : '/api';
 
 const CATEGORY_META = {
   mdr_fee: {
@@ -105,16 +105,23 @@ export default function ExceptionQueue({ runId, onExceptionResolved }) {
       });
 
       setExceptions((prev) =>
-        prev.map((e) =>
-          e.id === exceptionId || e.bank_record_id === exceptionId || e.payment_id === exceptionId
+        prev.map((e) => {
+          const isTarget =
+            (e._id && String(e._id) === String(exceptionId)) ||
+            (e.id && String(e.id) === String(exceptionId)) ||
+            (e.bank_record_id && String(e.bank_record_id) === String(exceptionId)) ||
+            (e.payment_id && String(e.payment_id) === String(exceptionId)) ||
+            (e.order_id && String(e.order_id) === String(exceptionId));
+          return isTarget
             ? { ...e, human_decision: decision, ...customData }
-            : e
-        )
+            : e;
+        })
       );
 
       if (onExceptionResolved) onExceptionResolved();
     } catch (err) {
       console.error('[ExceptionQueue] Resolve error:', err);
+      alert(err.response?.data?.error?.message || 'Failed to resolve exception');
     } finally {
       setResolvingId(null);
     }

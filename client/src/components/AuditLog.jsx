@@ -17,7 +17,7 @@ import {
 
 const API_BASE = import.meta.env.VITE_SERVER_URL
   ? `${import.meta.env.VITE_SERVER_URL}/api`
-  : 'http://localhost:5000/api';
+  : '/api';
 
 const ACTOR_BADGES = {
   claude: {

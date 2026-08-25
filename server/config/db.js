@@ -3,21 +3,42 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+let cachedConn = null;
+let cachedPromise = null;
+
 export const connectDB = async (customUri) => {
-  const uri = customUri || process.env.MONGO_URI || 'mongodb://localhost:27017/reconcile_ai';
-  try {
-    const conn = await mongoose.connect(uri);
-    console.log(`[MongoDB] Connected successfully: ${conn.connection.host}/${conn.connection.name}`);
-    return conn;
-  } catch (error) {
-    console.error(`[MongoDB] Connection Error: ${error.message}`);
-    process.exit(1);
+  if (mongoose.connection.readyState >= 1) {
+    return mongoose.connection;
   }
+
+  if (cachedConn) {
+    return cachedConn;
+  }
+
+  const uri = customUri || process.env.MONGO_URI || 'mongodb://localhost:27017/reconcile_ai';
+
+  if (!cachedPromise) {
+    cachedPromise = mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 8000,
+    }).then((conn) => {
+      cachedConn = conn;
+      console.log(`[MongoDB] Connected successfully: ${conn.connection.host}/${conn.connection.name}`);
+      return conn;
+    }).catch((error) => {
+      cachedPromise = null;
+      console.error(`[MongoDB] Connection Error: ${error.message}`);
+      throw error;
+    });
+  }
+
+  return cachedPromise;
 };
 
 export const disconnectDB = async () => {
   try {
     await mongoose.disconnect();
+    cachedConn = null;
+    cachedPromise = null;
     console.log('[MongoDB] Disconnected successfully');
   } catch (error) {
     console.error(`[MongoDB] Disconnect Error: ${error.message}`);
