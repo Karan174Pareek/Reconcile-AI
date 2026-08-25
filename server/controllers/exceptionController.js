@@ -218,36 +218,60 @@ export async function resolveException(req, res, next) {
       console.warn(`[DB Write: MEMORY_STORE_ONLY] Exception ${id} resolved to ${decision} in MemoryStore.`);
     }
 
-    // Update Run summary statistics
-    if (exception.run_id) {
-      const remainingUnresolved = await Exception.countDocuments({
-        run_id: exception.run_id,
-        human_decision: 'pending',
-      });
-      const run = await Run.findOne({ run_id: exception.run_id });
-      if (run) {
-        run.unresolved = remainingUnresolved;
-        const total = run.total_records || 1;
-        const matched = Math.max(0, total - remainingUnresolved);
-        run.match_rate = Math.min(100, Math.max(0, (matched / total) * 100));
-        await run.save();
+    // Update Run summary statistics & audit log
+    if (exception.run_id && mongoose.connection.readyState === 1) {
+      try {
+        const remainingUnresolved = await Exception.countDocuments({
+          run_id: exception.run_id,
+          human_decision: 'pending',
+        });
+        const run = await Run.findOne({ run_id: exception.run_id });
+        if (run) {
+          run.unresolved = remainingUnresolved;
+          const total = run.total_records || 1;
+          const matched = Math.max(0, total - remainingUnresolved);
+          run.match_rate = Math.min(100, Math.max(0, (matched / total) * 100));
+          await run.save();
+          MemoryStore.saveRun(run);
+        }
+
+        await AuditLog.create({
+          run_id: exception.run_id,
+          actor,
+          action: `human_exception_${decision}`,
+          target_type: 'exception',
+          target_id: exception.bank_record_id || exception.payment_id || (exception._id ? exception._id.toString() : id),
+          details: {
+            decision,
+            manual_ledger_id: manual_ledger_id || null,
+            notes: notes || null,
+            category: exception.category,
+          },
+        });
+      } catch (e) {
+        console.warn('[Mongo Post-Resolve Warning]:', e.message);
       }
     }
 
-    // Log to Audit Trail
-    await AuditLog.create({
-      run_id: exception.run_id,
-      actor,
-      action: `human_exception_${decision}`,
-      target_type: 'exception',
-      target_id: exception.bank_record_id || exception.payment_id || exception._id.toString(),
-      details: {
-        decision,
-        manual_ledger_id: manual_ledger_id || null,
-        notes: notes || null,
-        category: exception.category,
-      },
-    });
+    // Also record audit in MemoryStore for high-availability
+    if (exception.run_id) {
+      const currentLogs = MemoryStore.getAuditLogs(exception.run_id);
+      currentLogs.unshift({
+        id: `audit_${Date.now()}`,
+        run_id: exception.run_id,
+        actor,
+        action: `human_exception_${decision}`,
+        target_type: 'exception',
+        target_id: exception.bank_record_id || exception.payment_id || (exception._id ? exception._id.toString() : id),
+        timestamp: new Date().toISOString(),
+        details: {
+          decision,
+          notes: notes || null,
+          category: exception.category,
+        },
+      });
+      MemoryStore.saveAuditLogs(exception.run_id, currentLogs);
+    }
 
     return res.status(200).json({
       success: true,
