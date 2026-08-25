@@ -80,42 +80,6 @@ On an enterprise 500-record benchmark dataset:
 
 ---
 
-## 🚀 Quick Start Guide
-
-### 1. Clone & Install Dependencies
-```bash
-git clone https://github.com/Karan174Pareek/Reconcile-AI.git
-cd Reconcile-AI
-npm install
-npm install --prefix client
-npm install --prefix server
-```
-
-### 2. Configure Environment Variables
-Create `.env` in the root directory:
-```env
-PORT=5000
-NODE_ENV=development
-CLIENT_URL=http://localhost:5173
-MONGO_URI=mongodb+srv://<username>:<password>@cluster0.z8j7w0c.mongodb.net/reconcile_ai?retryWrites=true&w=majority&appName=Cluster0
-JWT_SECRET=development_reconcile_ai_secret_key_32_chars_long
-JWT_EXPIRES_IN=7d
-CLAUDE_MODEL=claude-3-5-sonnet-20241022
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-```
-
-### 3. Run Automated Tests
-```bash
-npm test --prefix server
-```
-
-### 4. Start Development Servers
-```bash
-npm run dev
-```
-Open **http://localhost:5173** to launch the interactive platform.
-
----
-
 ## ⚖️ License
 MIT License. Copyright (c) 2026 Karan Pareek.
+
