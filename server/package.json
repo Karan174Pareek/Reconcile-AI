@@ -10,6 +10,7 @@
     "seed": "node scripts/generateSeed.js --mongo",
     "seed:csv": "node scripts/generateSeed.js --csv",
     "seed:all": "node scripts/generateSeed.js --mongo --csv",
+    "build": "echo 'Server build not required'",
     "test": "node --test"
   },
   "dependencies": {
