@@ -15,20 +15,30 @@ export const connectDB = async (customUri) => {
     return cachedConn;
   }
 
-  const uri = customUri || process.env.MONGO_URI || 'mongodb://localhost:27017/reconcile_ai';
+  const uri = customUri || process.env.MONGO_URI;
+
+  if (!uri) {
+    throw new Error(
+      'MONGO_URI environment variable is missing. Please add your MongoDB Atlas connection string under Vercel Settings > Environment Variables.'
+    );
+  }
 
   if (!cachedPromise) {
-    cachedPromise = mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 8000,
-    }).then((conn) => {
-      cachedConn = conn;
-      console.log(`[MongoDB] Connected successfully: ${conn.connection.host}/${conn.connection.name}`);
-      return conn;
-    }).catch((error) => {
-      cachedPromise = null;
-      console.error(`[MongoDB] Connection Error: ${error.message}`);
-      throw error;
-    });
+    cachedPromise = mongoose
+      .connect(uri, {
+        serverSelectionTimeoutMS: 8000,
+        connectTimeoutMS: 8000,
+      })
+      .then((conn) => {
+        cachedConn = conn;
+        console.log(`[MongoDB] Connected successfully: ${conn.connection.host}/${conn.connection.name}`);
+        return conn;
+      })
+      .catch((error) => {
+        cachedPromise = null;
+        console.error(`[MongoDB] Connection Error: ${error.message}`);
+        throw error;
+      });
   }
 
   return cachedPromise;
