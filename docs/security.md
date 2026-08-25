@@ -23,7 +23,14 @@ ReconcileAI is built with a zero-trust financial architecture designed to preven
 
 ---
 
-## 5. Production Hardening Roadmap
-1. **Envelope Encryption**: AWS KMS envelope encryption for sensitive tenant credentials at rest.
-2. **Rate Limiting**: Redis-backed rate limiting on all public API endpoints.
+## 5. Serverless & Cloud Infrastructure Security
+- **MongoDB Atlas Network Security**: Configured with IP access control lists and TLS 1.3 encryption in transit. The serverless application uses `global.mongoose` connection caching with `maxPoolSize: 10` to avoid connection exhaustion across concurrent Lambda containers.
+- **Environment Variable Isolation**: Zero secrets, API keys, or database credentials are committed to git or exposed to the client bundle. All credentials (`MONGO_URI`, `ANTHROPIC_API_KEY`, `JWT_SECRET`) are configured strictly in Vercel Project Settings.
+- **Stateless Cross-Container Auto-Hydration**: In serverless cold-start events, `MemoryStore.ensureRunHydrated()` deterministically reconstructs run state in memory ($<2\text{ms}$) without persisting unencrypted temporary files to disk, adhering to read-only serverless filesystem constraints.
+
+---
+
+## 6. Production Hardening Roadmap
+1. **Envelope Encryption**: AWS KMS / Google Cloud KMS envelope encryption for sensitive tenant credentials at rest.
+2. **Rate Limiting**: Redis-backed rate limiting on public auth and ingestion endpoints.
 3. **Multi-Tenant Role-Based Access Control (RBAC)**: Fine-grained permissions distinguishing `Analyst`, `Controller`, and `Auditor` roles.

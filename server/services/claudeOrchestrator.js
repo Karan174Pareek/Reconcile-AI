@@ -588,7 +588,7 @@ export async function executePass3(runId, options = {}) {
     status: { $in: ['pending', 'exception'] },
   }).lean();
 
-  const availableLedgerRecords = await LedgerRecord.find({
+  const fallbackLedgerRecords = await LedgerRecord.find({
     run_id: runId,
     status: { $in: ['pending'] },
   }).lean();
@@ -617,7 +617,7 @@ export async function executePass3(runId, options = {}) {
     const slice = unmatchedBankRecords.slice(i, i + BATCH_SIZE);
     const batchItems = slice.map((bank) => ({
       bank,
-      candidates: findCandidatesForBankRecord(bank, availableLedgerRecords, 5),
+      candidates: findCandidatesForBankRecord(bank, fallbackLedgerRecords, 5),
     }));
     batches.push(batchItems);
   }
