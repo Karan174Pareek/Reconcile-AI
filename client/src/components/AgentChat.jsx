@@ -74,6 +74,27 @@ export default function AgentChat({ runId, isOpen, onClose }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  const handlePaste = (e) => {
+    const clipboardData = e.clipboardData || window.clipboardData;
+    if (!clipboardData) return;
+
+    const items = Array.from(clipboardData.items || []);
+    const hasImage = items.some((item) => item.type.startsWith('image/'));
+
+    if (hasImage) {
+      e.preventDefault();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `msg-system-${Date.now()}`,
+          role: 'assistant',
+          content: '**Image input is not supported.** The Ask AI assistant is a text-only forensic tool. Please describe your question or paste the relevant text data instead.',
+          tools: [],
+        },
+      ]);
+    }
+  };
+
   const handleSendMessage = async (textToSend) => {
     const text = textToSend || inputValue;
     const targetRunId = (runId && runId !== 'N/A') ? runId : 'run-seed-razorpay-001';
@@ -357,6 +378,7 @@ export default function AgentChat({ runId, isOpen, onClose }) {
                   placeholder="Ask about batches, MDR fees, or GST credits..."
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
+                  onPaste={handlePaste}
                   disabled={isStreaming}
                   className="flex-1 bg-white border border-gray-200 text-gray-900 text-xs rounded-lg px-3 py-2 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
                 />

@@ -70,10 +70,28 @@ export async function streamAgentChat(req, res, next) {
     }
 
     const client = new Anthropic({ apiKey });
-    let conversation = messages.map((m) => ({
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-    }));
+    let conversation = messages.map((m) => {
+      let content = m.content;
+      if (typeof content === 'string') {
+        return { role: m.role === 'assistant' ? 'assistant' : 'user', content };
+      }
+      if (Array.isArray(content)) {
+        const textParts = content
+          .filter((block) => block.type === 'text')
+          .map((block) => block.text);
+        return {
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: textParts.length > 0 ? textParts.join('\n') : JSON.stringify(content),
+        };
+      }
+      if (content && typeof content === 'object' && content.type === 'image') {
+        return {
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: '[Image content is not supported. Please describe the image in text.]',
+        };
+      }
+      return { role: m.role === 'assistant' ? 'assistant' : 'user', content: JSON.stringify(content) };
+    });
 
     // Multi-turn tool execution loop (max 5 turns)
     let turns = 0;
