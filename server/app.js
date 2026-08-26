@@ -75,6 +75,30 @@ app.get('/', (req, res) => {
   });
 });
 
+// Temporary byte-level API key diagnostic endpoint
+import crypto from 'crypto';
+
+app.get(['/debug-key', '/api/debug-key'], (req, res) => {
+  const rawKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '';
+  const cleanedKey = rawKey.trim().replace(/^["']|["']$/g, '').trim();
+
+  const rawHash = crypto.createHash('sha256').update(rawKey).digest('hex');
+  const cleanHash = crypto.createHash('sha256').update(cleanedKey).digest('hex');
+
+  res.json({
+    configured: !!rawKey,
+    raw_length: rawKey.length,
+    cleaned_length: cleanedKey.length,
+    has_leading_ws: /^\s/.test(rawKey),
+    has_trailing_ws: /\s$/.test(rawKey),
+    has_surrounding_quotes: /^["'].*["']$/.test(rawKey),
+    json_stringified: JSON.stringify(rawKey ? `${rawKey.slice(0, 10)}...${rawKey.slice(-6)}` : ''),
+    raw_sha256_hash: rawHash,
+    clean_sha256_hash: cleanHash,
+    is_byte_identical: rawHash === cleanHash,
+  });
+});
+
 // Health check endpoint
 app.get(['/health', '/api/health'], (req, res) => {
   const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '';
