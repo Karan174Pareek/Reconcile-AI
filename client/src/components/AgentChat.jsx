@@ -76,7 +76,8 @@ export default function AgentChat({ runId, isOpen, onClose }) {
 
   const handleSendMessage = async (textToSend) => {
     const text = textToSend || inputValue;
-    if (!text.trim() || isStreaming || !runId) return;
+    const targetRunId = (runId && runId !== 'N/A') ? runId : 'run-seed-razorpay-001';
+    if (!text.trim() || isStreaming || !targetRunId) return;
 
     const userMessageId = `msg-${Date.now()}`;
     const assistantMessageId = `msg-assistant-${Date.now()}`;
@@ -102,7 +103,7 @@ export default function AgentChat({ runId, isOpen, onClose }) {
     ]);
 
     try {
-      const response = await fetch(`${API_BASE}/runs/${runId}/chat`, {
+      const response = await fetch(`${API_BASE}/runs/${targetRunId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
