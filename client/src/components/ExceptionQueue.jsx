@@ -288,73 +288,92 @@ export default function ExceptionQueue({ runId, onExceptionResolved }) {
                     const expId = exp.id || exp._id?.toString() || exp.payment_id || exp.bank_record_id;
                     const isResolving = resolvingId === expId;
                     const meta = CATEGORY_META[exp.category] || CATEGORY_META.unknown;
+                    const confidencePercent = Math.round((exp.confidence || 0.85) * 100);
 
                     return (
                       <div
                         key={expId}
-                        className="rounded-lg bg-gray-50/70 border border-gray-200 p-4 transition-all hover:bg-gray-50"
+                        className="rounded-lg bg-white border border-slate-200/80 p-3.5 sm:p-4 shadow-2xs hover:border-slate-300 transition-all space-y-3"
                       >
-                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
-                          <div className="space-y-2 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span
-                                className={`text-[10px] font-mono font-medium px-2.5 py-0.5 rounded-full border ${meta.style}`}
-                              >
-                                {meta.label}
+                        {/* Header: Category Badge + References + High Contrast Confidence Pill */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded border ${meta.style}`}
+                            >
+                              {meta.label}
+                            </span>
+
+                            {exp.order_id && (
+                              <span className="text-[11px] font-mono text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 font-medium">
+                                ORDER: {exp.order_id}
                               </span>
+                            )}
 
-                              {exp.order_id && (
-                                <span className="text-[11px] font-mono text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-200">
-                                  Order: {exp.order_id}
-                                </span>
-                              )}
-
-                              {exp.payment_id && (
-                                <span className="text-[11px] font-mono text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
-                                  Payment: {exp.payment_id}
-                                </span>
-                              )}
-
-                              <span className="text-[11px] text-gray-400 font-mono">
-                                Confidence: {(exp.confidence * 100).toFixed(0)}%
+                            {exp.payment_id && (
+                              <span className="text-[11px] font-mono text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                                PAY: {exp.payment_id}
                               </span>
-                            </div>
-
-                            {/* Forensic Rationale in Plain English */}
-                            <p className="text-xs text-gray-800 leading-relaxed font-sans">
-                              {exp.ai_rationale}
-                            </p>
-
-                            {/* Financial Breakdown */}
-                            {(exp.expected_amount > 0 || exp.settled_amount > 0) && (
-                              <div className="flex flex-wrap items-center gap-3 pt-1 text-xs font-mono text-gray-600">
-                                <span>Expected: ₹{Number(exp.expected_amount).toFixed(2)}</span>
-                                <span>•</span>
-                                <span>Settled: ₹{Number(exp.settled_amount).toFixed(2)}</span>
-                                <span>•</span>
-                                <span className="text-red-700 font-bold">
-                                  Variance: ₹{Number(exp.variance_amount || 0).toFixed(2)}
-                                </span>
-                              </div>
                             )}
                           </div>
 
-                          {/* Decision Action Buttons */}
-                          <div className="flex items-center gap-2 self-end md:self-start shrink-0">
+                          {/* High Contrast Confidence Pill */}
+                          <div className="flex items-center space-x-1.5 bg-slate-100/80 border border-slate-200 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold text-slate-700">
+                            <div className="w-10 h-1.5 bg-slate-200 rounded-full overflow-hidden shrink-0">
+                              <div
+                                className={`h-full ${confidencePercent >= 90 ? 'bg-emerald-500' : confidencePercent >= 75 ? 'bg-blue-500' : 'bg-amber-500'}`}
+                                style={{ width: `${confidencePercent}%` }}
+                              />
+                            </div>
+                            <span>{confidencePercent}% CONFIDENCE</span>
+                          </div>
+                        </div>
+
+                        {/* 3-Column Split Amounts View */}
+                        <div className="grid grid-cols-3 gap-2 bg-slate-50/80 border border-slate-200/80 rounded-md p-2.5 text-xs font-mono">
+                          <div>
+                            <span className="text-[10px] text-slate-500 block uppercase font-sans font-semibold">EXPECTED GROSS</span>
+                            <span className="text-slate-900 font-bold">₹{Number(exp.expected_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 block uppercase font-sans font-semibold">SETTLED NET</span>
+                            <span className="text-slate-900 font-bold">₹{Number(exp.settled_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 block uppercase font-sans font-semibold">VARIANCE</span>
+                            <span className={`font-bold ${Number(exp.variance_amount || 0) > 0 ? 'text-rose-700' : 'text-slate-700'}`}>
+                              ₹{Number(exp.variance_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* AI Rationale Diagnosis Box */}
+                        <div className="bg-slate-50 border border-slate-200/80 rounded p-2.5 text-xs text-slate-700 font-sans leading-relaxed">
+                          <span className="font-bold text-slate-900 text-[10px] uppercase font-mono block mb-0.5">AI DIAGNOSIS:</span>
+                          {exp.ai_rationale}
+                        </div>
+
+                        {/* Action Toolbar */}
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            Category: <span className="font-semibold text-slate-700">{exp.category}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
                             {exp.human_decision === 'pending' ? (
                               <>
                                 <button
                                   onClick={() => handleResolve(expId, 'accepted')}
                                   disabled={isResolving}
-                                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+                                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#0B72E7] hover:bg-[#0858B4] active:scale-[0.98] text-white text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shadow-xs"
                                 >
                                   <Check className="h-3.5 w-3.5" />
-                                  <span>Accept</span>
+                                  <span>Accept AI Match</span>
                                 </button>
                                 <button
                                   onClick={() => handleResolve(expId, 'rejected')}
                                   disabled={isResolving}
-                                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+                                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 active:scale-[0.98] text-xs font-medium transition-all cursor-pointer disabled:opacity-50"
                                 >
                                   <X className="h-3.5 w-3.5" />
                                   <span>Reject</span>
@@ -362,7 +381,7 @@ export default function ExceptionQueue({ runId, onExceptionResolved }) {
                               </>
                             ) : (
                               <span
-                                className={`text-[11px] font-mono uppercase px-2.5 py-1 rounded-md border ${
+                                className={`text-[10px] font-mono font-semibold uppercase px-2.5 py-1 rounded border ${
                                   exp.human_decision === 'accepted'
                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                     : 'bg-rose-50 text-rose-700 border-rose-200'

@@ -275,63 +275,76 @@ export default function DraftActionsQueue({ runId, onDraftActionUpdated }) {
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
-                            <div>
-                              <span className="text-gray-500 text-[10px] block">ENTRY TYPE</span>
-                              <span className="text-gray-900 uppercase font-semibold">{content.entry_type}</span>
+                          {/* T-Entry Ledger Header Strip */}
+                          <div className="bg-[#0C2340] text-white p-2.5 rounded-t-md flex items-center justify-between text-xs font-mono">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-[10px] bg-slate-800 text-slate-300 font-semibold px-2 py-0.5 rounded border border-slate-700 uppercase">
+                                JOURNAL ENTRY: {content.entry_type || 'CREDIT NOTE'}
+                              </span>
                             </div>
-                            <div>
-                              <span className="text-gray-500 text-[10px] block">AMOUNT</span>
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={editFormData.amount || ''}
-                                  onChange={(e) => setEditFormData({ ...editFormData, amount: Number(e.target.value) })}
-                                  className="bg-white border border-gray-300 rounded px-2 py-0.5 text-gray-900 font-bold w-full font-mono"
-                                />
-                              ) : (
-                                <span className="text-gray-900 font-bold">INR {content.amount?.toLocaleString()}</span>
-                              )}
+                            <div className="text-right">
+                              <span className="text-[10px] text-slate-400 block font-sans font-semibold">TOTAL AMOUNT</span>
+                              <span className="text-emerald-400 font-bold text-sm">
+                                ₹{Number(content.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
                             </div>
-                            <div>
-                              <span className="text-gray-500 text-[10px] block">DEBIT ACCOUNT</span>
+                          </div>
+
+                          {/* Double-Entry Debit vs Credit Split Grid (Ledger T-Entry Format) */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-white border-x border-b border-slate-200 rounded-b-md text-xs font-mono">
+                            {/* Debit Column */}
+                            <div className="p-2.5 rounded bg-blue-50/60 border border-blue-200/80 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-blue-900 uppercase">DEBIT (Dr.)</span>
+                                <span className="text-[10px] text-blue-700 font-semibold">₹{Number(content.amount || 0).toLocaleString('en-IN')}</span>
+                              </div>
                               {isEditing ? (
                                 <input
                                   type="text"
                                   value={editFormData.proposed_debit_account || ''}
                                   onChange={(e) => setEditFormData({ ...editFormData, proposed_debit_account: e.target.value })}
-                                  className="bg-white border border-gray-300 rounded px-2 py-0.5 text-gray-900 w-full"
+                                  className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
                                 />
                               ) : (
-                                <span className="text-gray-900 truncate block">{content.proposed_debit_account}</span>
+                                <div className="font-semibold text-slate-900 text-xs truncate">
+                                  {content.proposed_debit_account}
+                                </div>
                               )}
                             </div>
-                            <div>
-                              <span className="text-gray-500 text-[10px] block">CREDIT ACCOUNT</span>
+
+                            {/* Credit Column */}
+                            <div className="p-2.5 rounded bg-emerald-50/60 border border-emerald-200/80 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-emerald-900 uppercase">CREDIT (Cr.)</span>
+                                <span className="text-[10px] text-emerald-700 font-semibold">₹{Number(content.amount || 0).toLocaleString('en-IN')}</span>
+                              </div>
                               {isEditing ? (
                                 <input
                                   type="text"
                                   value={editFormData.proposed_credit_account || ''}
                                   onChange={(e) => setEditFormData({ ...editFormData, proposed_credit_account: e.target.value })}
-                                  className="bg-white border border-gray-300 rounded px-2 py-0.5 text-gray-900 w-full"
+                                  className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
                                 />
                               ) : (
-                                <span className="text-gray-900 truncate block">{content.proposed_credit_account}</span>
+                                <div className="font-semibold text-slate-900 text-xs truncate">
+                                  {content.proposed_credit_account}
+                                </div>
                               )}
                             </div>
                           </div>
 
-                          <div className="pt-2 border-t border-gray-200">
-                            <span className="text-gray-500 text-[10px] block font-mono">ACCOUNTING NARRATION</span>
+                          {/* Accounting Narration */}
+                          <div className="bg-slate-50 p-2.5 rounded border border-slate-200 text-xs">
+                            <span className="text-[10px] font-bold text-slate-500 font-mono uppercase block mb-0.5">ACCOUNTING NARRATION:</span>
                             {isEditing ? (
                               <input
                                 type="text"
                                 value={editFormData.narration || ''}
                                 onChange={(e) => setEditFormData({ ...editFormData, narration: e.target.value })}
-                                className="bg-white border border-gray-300 rounded px-2.5 py-1 text-gray-900 w-full mt-1 font-mono"
+                                className="w-full bg-white border border-slate-300 rounded px-2.5 py-1 text-slate-900 font-mono text-xs"
                               />
                             ) : (
-                              <span className="text-gray-700 font-mono">{content.narration}</span>
+                              <span className="text-slate-800 font-mono leading-relaxed">{content.narration}</span>
                             )}
                           </div>
                         </div>

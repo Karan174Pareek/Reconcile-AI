@@ -56,28 +56,30 @@ export default function Navbar({
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-gray-200/90 shadow-xs">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-15 sm:h-16 gap-2">
+        <div className="flex items-center justify-between h-14 gap-2">
           
-          {/* Left: Brand Logo */}
-          <div className="flex items-center space-x-2 shrink-0">
+          {/* Left: Brand Logo & Run Pill */}
+          <div className="flex items-center space-x-3 shrink-0">
             <button
               onClick={() => onSelectTab('overview')}
-              className="flex items-center space-x-2 sm:space-x-2.5 text-left focus:outline-hidden cursor-pointer group"
+              className="flex items-center space-x-2 text-left focus:outline-none cursor-pointer group"
             >
-              <BrandLogo className="h-8 w-8 sm:h-9 sm:w-9 group-hover:scale-105 transition-transform" />
+              <div className="h-7 w-7 rounded-lg bg-[#0C2340] flex items-center justify-center text-white font-bold text-sm shadow-xs group-hover:scale-105 transition-transform">
+                ⚡
+              </div>
               <div className="flex items-center space-x-1.5">
-                <span className="font-bold text-sm sm:text-base text-gray-900 tracking-tight">ReconcileAI</span>
-                <span className="text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
+                <span className="font-bold text-sm text-[#0C2340] tracking-tight">ReconcileAI</span>
+                <span className="text-[9px] font-semibold font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
                   v2.0
                 </span>
               </div>
             </button>
           </div>
 
-          {/* Center: Desktop Navigation Links (5 Items, 100% Consistent Active Style) */}
-          <nav className="hidden xl:flex items-center space-x-1 bg-gray-50/80 p-1 rounded-xl border border-gray-200/70">
+          {/* Center: Desktop Navigation Links with Understated Action Blue Underline */}
+          <nav className="hidden xl:flex items-center space-x-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -85,50 +87,56 @@ export default function Navbar({
                 <button
                   key={item.id}
                   onClick={() => onSelectTab(item.id)}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                  className={`relative flex items-center space-x-1.5 px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
                     isActive
-                      ? 'bg-blue-50 text-blue-700 font-semibold border border-blue-200/80 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 font-medium'
+                      ? 'text-[#0C2340] font-semibold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md'
                   }`}
                 >
-                  <Icon className={`h-3.5 w-3.5 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
+                  <Icon className={`h-3.5 w-3.5 ${isActive ? 'text-[#0B72E7]' : 'text-slate-400'}`} />
                   <span>{item.label}</span>
+                  {isActive && (
+                    <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#0B72E7] rounded-full" />
+                  )}
                 </button>
               );
             })}
           </nav>
 
           {/* Right: Actions */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
+          <div className="flex items-center space-x-2">
             
-            {/* Live WS Status Pill (Visible on Desktop) */}
+            {/* Live WS Status Pill */}
             <div
               title={isConnected ? 'Connected to live WebSocket events' : 'Polling for updates'}
-              className={`hidden 2xl:flex items-center space-x-1 px-2 py-1 rounded-md text-[10px] font-mono font-semibold border ${
+              className={`hidden 2xl:flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono font-semibold border ${
                 isConnected
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                   : 'bg-amber-50 border-amber-200 text-amber-700'
               }`}
             >
-              <Radio className={`h-2.5 w-2.5 ${isConnected ? 'animate-pulse text-emerald-600' : 'text-amber-600'}`} />
-              <span>{isConnected ? 'LIVE' : 'POLLING'}</span>
+              <span className="relative flex h-2 w-2">
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isConnected ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${isConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              </span>
+              <span>{isConnected ? 'LIVE SYNC' : 'POLLING'}</span>
             </div>
 
             {/* Simplified Run Selector Dropdown (Visible on Tablet & Desktop) */}
             {runs.length > 0 && activeRun && (
               <div className="relative hidden md:block" ref={dropdownRef}>
-                <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white shadow-xs">
+                <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/80 shadow-xs">
                   <button
                     type="button"
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className="flex items-center space-x-1.5 px-2.5 py-1.5 text-xs text-gray-800 hover:bg-gray-50 rounded-l-lg transition-colors cursor-pointer font-medium"
+                    className="flex items-center space-x-1.5 px-2.5 py-1 text-xs text-slate-800 hover:bg-slate-200/60 rounded-l-md transition-colors cursor-pointer font-semibold font-mono"
                   >
                     <span className={`h-2 w-2 rounded-full ${activeRun.status === 'complete' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
-                    <span className="font-medium text-gray-900">Current Run</span>
-                    <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                    <span className="font-semibold text-slate-900">{activeRun.run_id ? activeRun.run_id.slice(0, 16) + '...' : 'Current Run'}</span>
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
                   </button>
 
-                  <div className="h-4 w-px bg-gray-200" />
+                  <div className="h-3.5 w-px bg-slate-300" />
 
                   {/* Integrated Refresh Button */}
                   <button
