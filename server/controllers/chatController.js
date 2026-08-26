@@ -148,7 +148,7 @@ export async function streamAgentChat(req, res, next) {
     if (isCreditOrAuth) {
       sendEvent({
         type: 'text',
-        content: `*(Anthropic API notice: Credit limit reached. Querying active database via Forensic Inspector Engine.)*\n\n`,
+        content: `*(Anthropic API notice [Exact SDK Error: "${err.message}"]: Credit limit reached. Querying active database via Forensic Inspector Engine.)*\n\n`,
       });
       await handleOfflineAgentConversation(run_id, run, messages, sendEvent);
       sendEvent({ type: 'done' });
