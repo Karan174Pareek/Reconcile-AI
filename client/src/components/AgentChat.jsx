@@ -36,6 +36,26 @@ export default function AgentChat({ runId, isOpen, onClose }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef(null);
 
+  // Dynamically synchronize welcome message with the active runId
+  useEffect(() => {
+    if (runId && runId !== 'N/A') {
+      setMessages((prev) => {
+        const hasUserMessage = prev.some((m) => m.role === 'user');
+        if (!hasUserMessage) {
+          return [
+            {
+              id: 'welcome',
+              role: 'assistant',
+              content: `Hello! I am your **ReconcileAI Forensic Assistant**. I have read-only access to inspect your settlement batches, batch balance integrity, unpacked order line items, MDR fee variances, and GST tax credits for **Run ${runId}**.\n\nWhat would you like to inspect?`,
+              tools: [],
+            },
+          ];
+        }
+        return prev;
+      });
+    }
+  }, [runId]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
