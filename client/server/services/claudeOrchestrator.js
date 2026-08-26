@@ -23,12 +23,24 @@ import DraftAction from '../models/DraftAction.js';
 import AuditLog from '../models/AuditLog.js';
 
 /**
+ * Sanitizes and validates Anthropic API key from environment variables
+ */
+export function getSanitizedAnthropicKey() {
+  const rawKey = (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '').trim();
+  const cleanedKey = rawKey.replace(/^["']|["']$/g, '').trim();
+  if (!cleanedKey || cleanedKey === 'mock-key' || cleanedKey.includes('placeholder') || cleanedKey.includes('your_anthropic')) {
+    return null;
+  }
+  return cleanedKey;
+}
+
+/**
  * Initializes Anthropic SDK client
  */
 function getAnthropicClient(customClient = null) {
   if (customClient) return customClient;
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-  if (!apiKey || apiKey === 'mock-key' || apiKey.includes('placeholder') || apiKey.includes('your_anthropic')) {
+  const apiKey = getSanitizedAnthropicKey();
+  if (!apiKey) {
     return null; // Fallback reasoning in dev/testing if no live API key
   }
   return new Anthropic({ apiKey });
@@ -459,19 +471,25 @@ export async function executePass3(runId, options = {}) {
               created_at: new Date(),
             });
 
-            await AuditLog.create({
-              run_id: runId,
-              actor: 'claude_settlement_reasoner',
-              action: 'settlement_line_item_matched',
-              target_type: 'match',
-              target_id: li?.payment_id,
-              details: {
-                payment_id: li?.payment_id,
-                order_id: li?.order_id,
-                ledger_record_id: evalItem.match_ledger_id,
-                rationale: evalItem.rationale,
-              },
-            });
+            if (mongoose.connection.readyState === 1) {
+              try {
+                await AuditLog.create({
+                  run_id: runId,
+                  actor: 'claude_settlement_reasoner',
+                  action: 'settlement_line_item_matched',
+                  target_type: 'match',
+                  target_id: li?.payment_id,
+                  details: {
+                    payment_id: li?.payment_id,
+                    order_id: li?.order_id,
+                    ledger_record_id: evalItem.match_ledger_id,
+                    rationale: evalItem.rationale,
+                  },
+                });
+              } catch (e) {
+                console.warn('[AuditLog Match Create Note]:', e.message);
+              }
+            }
             continue;
           }
         }

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { CLAUDE_AGENT_TOOLS, executeAgentTool } from '../services/agentToolRouter.js';
 import Run from '../models/Run.js';
 import { MemoryStore } from '../services/memoryStore.js';
+import { getSanitizedAnthropicKey } from '../services/claudeOrchestrator.js';
 
 const AGENT_SYSTEM_PROMPT = `You are ReconcileAI's Tier-3 Senior Forensic Financial Assistant.
 You have real-time read-only access to the active reconciliation database for this run via tool functions.
@@ -58,8 +59,8 @@ export async function streamAgentChat(req, res, next) {
       return res.end();
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-    const isLiveApiKey = apiKey && apiKey !== 'mock-key' && !apiKey.includes('placeholder') && !apiKey.includes('your_anthropic');
+    const apiKey = getSanitizedAnthropicKey();
+    const isLiveApiKey = !!apiKey;
 
     if (!isLiveApiKey) {
       // Deterministic tool-using offline assistant for testing/development
