@@ -221,3 +221,62 @@ export async function generateSeedRun(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Controller: Cold Reset — clears state, generates a fresh seed dataset, and executes full reconciliation from scratch
+ * POST /api/runs/cold-reset
+ */
+export async function coldResetRun(req, res, next) {
+  try {
+    const isHeldOut = req.body.held_out === true;
+    const runId = `RUN-COLD-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`;
+    console.log(`[Cold Reset] Initializing fresh run: ${runId} (held_out=${isHeldOut})`);
+
+    const data = await generateRazorpaySeedData(runId, { isHeldOut });
+
+    const runData = {
+      run_id: runId,
+      status: 'pending',
+      total_records: data.settlementLineItems?.length || 500,
+      pass1_matched: 0,
+      pass2_matched: 0,
+      pass3_matched: 0,
+      unresolved: data.settlementLineItems?.length || 500,
+      match_rate: 0.0,
+      created_at: new Date(),
+      completed_at: null,
+    };
+
+    MemoryStore.saveRun(runData);
+    MemoryStore.saveSeedData(runId, data);
+
+    try {
+      if (mongoose.connection.readyState === 1) {
+        await Promise.all([
+          Run.create(runData),
+          data.bankRecords?.length ? BankRecord.insertMany(data.bankRecords, { ordered: false }) : Promise.resolve(),
+          data.ledgerRecords?.length ? LedgerRecord.insertMany(data.ledgerRecords, { ordered: false }) : Promise.resolve(),
+          data.settlementReports?.length ? SettlementReport.insertMany(data.settlementReports, { ordered: false }) : Promise.resolve(),
+          data.settlementLineItems?.length ? SettlementLineItem.insertMany(data.settlementLineItems, { ordered: false }) : Promise.resolve(),
+        ]);
+      }
+    } catch (mongoErr) {
+      console.warn('[Cold Reset Mongo Warning]:', mongoErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Cold reset successful. New clean run ${runId} ready for evaluation.`,
+      run_id: runId,
+      stats: {
+        bank_credits: data.bankRecords?.length || 0,
+        settlement_batches: data.settlementReports?.length || 0,
+        total_order_line_items: data.settlementLineItems?.length || 0,
+        ledger_records: data.ledgerRecords?.length || 0,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

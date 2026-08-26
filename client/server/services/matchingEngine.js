@@ -234,6 +234,8 @@ export function reconcileLevel1(settlementReports = [], settlementLineItems = []
         settlement_id: sId,
         method: 'batch_integrity',
         confidence: 1.0,
+        item_count: items.length,
+        total_line_items: items.length,
         rationale: `Batch integrity verified: ${items.length} line items sum to ₹${computedNetSum.toFixed(2)} exactly balancing batch settlement ₹${expectedBatchAmount.toFixed(2)} (MDR: ₹${computedFeeSum.toFixed(2)}, GST: ₹${computedTaxSum.toFixed(2)})`,
         variance_category: 'none',
         variance_amount: 0,
