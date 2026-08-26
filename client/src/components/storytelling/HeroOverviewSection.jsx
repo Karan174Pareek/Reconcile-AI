@@ -41,7 +41,9 @@ export default function HeroOverviewSection({
       }
     } catch (err) {
       console.error('[HeroOverview] Seed error:', err);
-      const msg = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'Failed to generate benchmark dataset';
+      const rawMsg = err.response?.data?.error?.message || err.response?.data?.message || err.message || '';
+      const isRawHttpError = !rawMsg || rawMsg.includes('Cannot POST') || rawMsg.includes('404') || rawMsg.includes('500') || rawMsg.includes('ECONNREFUSED');
+      const msg = isRawHttpError ? 'Benchmark seed service temporarily unavailable. Please try again.' : rawMsg;
       setSeedError(msg);
     } finally {
       setIsGeneratingSeed(false);
@@ -58,7 +60,9 @@ export default function HeroOverviewSection({
       }
     } catch (err) {
       console.error('[HeroOverview] Cold Reset error:', err);
-      const msg = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'Failed cold reset run';
+      const rawMsg = err.response?.data?.error?.message || err.response?.data?.message || err.message || '';
+      const isRawHttpError = !rawMsg || rawMsg.includes('Cannot POST') || rawMsg.includes('404') || rawMsg.includes('500') || rawMsg.includes('ECONNREFUSED');
+      const msg = isRawHttpError ? 'Reset & Cold Run service temporarily unavailable. Please try again.' : rawMsg;
       setSeedError(msg);
     } finally {
       setIsGeneratingSeed(false);
@@ -140,9 +144,15 @@ export default function HeroOverviewSection({
           </div>
 
           {seedError && (
-            <p className="text-xs text-rose-700 font-mono bg-rose-50 p-3 rounded-lg border border-rose-200">
-              {seedError}
-            </p>
+            <div className="flex items-center justify-between text-xs text-rose-700 font-mono bg-rose-50 p-3 rounded-lg border border-rose-200">
+              <span>{seedError}</span>
+              <button
+                onClick={() => setSeedError(null)}
+                className="text-rose-500 hover:text-rose-800 font-bold ml-3 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
           )}
 
           {/* Capabilities Badges */}

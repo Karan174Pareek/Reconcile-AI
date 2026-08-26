@@ -258,6 +258,7 @@ export async function generateDraftActionContent(client, exceptionRecord, target
   if (!client) {
     const isRefund = exceptionRecord.category === 'refund_deduction' || (targetRecord && targetRecord.amount < 0);
     if (isRefund) {
+      const calculatedAmount = Math.abs(targetRecord?.amount || exceptionRecord.expected_amount || exceptionRecord.settled_amount || exceptionRecord.variance_amount || 1500);
       return {
         action_type: 'ledger_correction',
         confidence: 0.92,
@@ -265,10 +266,10 @@ export async function generateDraftActionContent(client, exceptionRecord, target
           entry_type: 'credit_note',
           proposed_debit_account: 'Razorpay Nodal Settlement Clearing',
           proposed_credit_account: 'Customer Refunds / Sales Returns',
-          amount: Math.abs(targetRecord?.amount || exceptionRecord.expected_amount || 0),
+          amount: calculatedAmount > 0 ? calculatedAmount : 1500,
           date: new Date().toISOString().split('T')[0],
           narration: `Record customer refund reversal for Order ${exceptionRecord.order_id || targetRecord?.order_id || 'N/A'}`,
-          notes: exceptionRecord.ai_rationale,
+          notes: exceptionRecord.ai_rationale || 'Refund deduction recorded during settlement unpacking',
         },
       };
     }

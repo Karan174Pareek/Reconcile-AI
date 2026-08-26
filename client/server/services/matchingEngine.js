@@ -389,7 +389,7 @@ export function reconcileLevel2(settlementLineItems = [], ledgerRecords = [], ba
             rounding: 0,
             unaccounted: grossDiff,
           },
-          ai_rationale: `Order ${orderId} gross amount mismatch (Ledger expects ₹${expectedGross.toFixed(2)}, settled ₹${itemAmount.toFixed(2)}). Possible partial settlement or promo discount.`,
+          ai_rationale: `Order ${orderId} gross amount mismatch (Ledger expects ₹${expectedGross.toFixed(2)}, settled ₹${itemAmount.toFixed(2)}, variance ₹${grossDiff.toFixed(2)}). Partial settlement discrepancy requiring review.`,
           confidence: 0.85,
           human_decision: 'pending',
         });

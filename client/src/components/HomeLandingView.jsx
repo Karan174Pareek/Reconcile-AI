@@ -28,7 +28,7 @@ export default function HomeLandingView({
   isExecutingPipeline,
   refreshRun,
 }) {
-  const activeRun = runs.find((r) => r.run_id === activeRunId) || runData || runs[0];
+  const activeRun = (runData && (runData.run_id === activeRunId || !activeRunId)) ? runData : (runs.find((r) => r.run_id === activeRunId) || runData || runs[0]);
 
   return (
     <div className="space-y-10 animate-fadeIn">

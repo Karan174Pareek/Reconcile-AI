@@ -223,7 +223,7 @@ export async function resolveException(req, res, next) {
       console.warn(`[DB Write: MEMORY_STORE_ONLY] Exception ${id} resolved to ${decision} in MemoryStore.`);
     }
 
-    // Update Run summary statistics & audit log
+    // Update Run summary statistics
     if (exception.run_id && mongoose.connection.readyState === 1) {
       try {
         const remainingUnresolved = await Exception.countDocuments({
@@ -239,42 +239,43 @@ export async function resolveException(req, res, next) {
           await run.save();
           MemoryStore.saveRun(run);
         }
-
-        await AuditLog.create({
-          run_id: exception.run_id,
-          actor,
-          action: `human_exception_${decision}`,
-          target_type: 'exception',
-          target_id: exception.bank_record_id || exception.payment_id || (exception._id ? exception._id.toString() : id),
-          details: {
-            decision,
-            manual_ledger_id: manual_ledger_id || null,
-            notes: notes || null,
-            category: exception.category,
-          },
-        });
       } catch (e) {
-        console.warn('[Mongo Post-Resolve Warning]:', e.message);
+        console.warn('[Mongo Run Summary Update Warning]:', e.message);
       }
     }
 
-    // Also record audit in MemoryStore for high-availability
+    // Audit Logging (Always write to MemoryStore + MongoDB if connected)
     if (exception.run_id) {
-      const currentLogs = MemoryStore.getAuditLogs(exception.run_id);
-      currentLogs.unshift({
-        id: `audit_${Date.now()}`,
+      const auditPayload = {
+        id: `audit_exc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         run_id: exception.run_id,
         actor,
         action: `human_exception_${decision}`,
         target_type: 'exception',
-        target_id: exception.bank_record_id || exception.payment_id || (exception._id ? exception._id.toString() : id),
+        target_id: exception.bank_record_id || exception.payment_id || exception.settlement_id || (exception._id ? exception._id.toString() : id),
         timestamp: new Date().toISOString(),
         details: {
           decision,
+          before_state: 'pending',
+          after_state: decision,
+          manual_ledger_id: manual_ledger_id || null,
           notes: notes || null,
           category: exception.category,
+          settlement_id: exception.settlement_id || null,
+          order_id: exception.order_id || null,
         },
-      });
+      };
+
+      if (mongoose.connection.readyState === 1) {
+        try {
+          await AuditLog.create(auditPayload);
+        } catch (e) {
+          console.warn('[Mongo AuditLog Exception Create Warning]:', e.message);
+        }
+      }
+
+      const currentLogs = MemoryStore.getAuditLogs(exception.run_id);
+      currentLogs.unshift(auditPayload);
       MemoryStore.saveAuditLogs(exception.run_id, currentLogs);
     }
 

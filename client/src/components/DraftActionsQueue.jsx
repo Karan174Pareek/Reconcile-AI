@@ -17,11 +17,24 @@ import {
   HelpCircle,
 } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_SERVER_URL
-  ? `${import.meta.env.VITE_SERVER_URL}/api`
-  : '/api';
+const isDraftValid = (draft, currentContent) => {
+  if (!currentContent) return false;
+  if (draft.action_type === 'ledger_correction') {
+    const hasAmount = Number(currentContent.amount) > 0;
+    const hasDebit = Boolean(currentContent.proposed_debit_account && String(currentContent.proposed_debit_account).trim());
+    const hasCredit = Boolean(currentContent.proposed_credit_account && String(currentContent.proposed_credit_account).trim());
+    const hasNarration = Boolean(currentContent.narration && String(currentContent.narration).trim());
+    return hasAmount && hasDebit && hasCredit && hasNarration;
+  } else if (draft.action_type === 'vendor_email') {
+    const hasRecipient = Boolean(currentContent.recipient && String(currentContent.recipient).trim());
+    const hasSubject = Boolean(currentContent.subject && String(currentContent.subject).trim());
+    const hasBody = Boolean(currentContent.body && String(currentContent.body).trim());
+    return hasRecipient && hasSubject && hasBody;
+  }
+  return true;
+};
 
-export default function DraftActionsQueue({ runId }) {
+export default function DraftActionsQueue({ runId, onDraftActionUpdated }) {
   const [draftActions, setDraftActions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [actioningId, setActioningId] = useState(null);
@@ -76,6 +89,7 @@ export default function DraftActionsQueue({ runId }) {
         prev.map((d) => (d._id === draftId ? res.data.data : d))
       );
       setEditingId(null);
+      if (onDraftActionUpdated) onDraftActionUpdated();
     } catch (err) {
       console.error('[Approve Action Error]:', err);
       alert(err.response?.data?.error?.message || 'Failed to approve draft action');
@@ -93,6 +107,7 @@ export default function DraftActionsQueue({ runId }) {
         prev.map((d) => (d._id === draftId ? res.data.data : d))
       );
       setEditingId(null);
+      if (onDraftActionUpdated) onDraftActionUpdated();
     } catch (err) {
       console.error('[Reject Action Error]:', err);
       alert(err.response?.data?.error?.message || 'Failed to reject draft action');
@@ -324,56 +339,62 @@ export default function DraftActionsQueue({ runId }) {
                     </div>
 
                     {/* Action Controls */}
-                    {isPending && (
-                      <div className="flex items-center justify-end space-x-2 pt-1">
-                        {isEditing ? (
-                          <>
-                            <button
-                              onClick={handleCancelEdit}
-                              className="px-3 py-1.5 rounded-lg text-xs text-gray-600 hover:text-gray-900"
-                            >
-                              Cancel Edit
-                            </button>
-                            <button
-                              onClick={() => handleApproveAction(draft._id)}
-                              disabled={isActioning}
-                              className="btn-primary text-xs py-1.5 px-3.5"
-                            >
-                              <Save className="h-3.5 w-3.5" />
-                              <span>Save & Approve</span>
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => handleStartEdit(draft)}
-                              className="btn-secondary text-xs py-1.5 px-3"
-                            >
-                              <Edit3 className="h-3.5 w-3.5" />
-                              <span>Edit Draft</span>
-                            </button>
-
-                            <button
-                              onClick={() => handleApproveAction(draft._id)}
-                              disabled={isActioning}
-                              className="btn-primary text-xs py-1.5 px-3.5"
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                              <span>Approve Action</span>
-                            </button>
-
-                            <button
-                              onClick={() => handleRejectAction(draft._id)}
-                              disabled={isActioning}
-                              className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 text-xs font-medium transition-colors"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                              <span>Reject</span>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
+                    {isPending && (() => {
+                      const isValid = isDraftValid(draft, content);
+                      return (
+                        <div className="flex items-center justify-end space-x-2 pt-1">
+                          {isEditing ? (
+                            <>
+                              <button
+                                onClick={handleCancelEdit}
+                                className="px-3 py-1.5 rounded-lg text-xs text-gray-600 hover:text-gray-900 cursor-pointer"
+                              >
+                                Cancel Edit
+                              </button>
+                              <button
+                                onClick={() => handleApproveAction(draft._id)}
+                                disabled={isActioning || !isValid}
+                                title={!isValid ? 'Incomplete draft: required fields must be populated' : 'Save and approve action'}
+                                className="btn-primary text-xs py-1.5 px-3.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <Save className="h-3.5 w-3.5" />
+                                <span>Save & Approve</span>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleStartEdit(draft)}
+                                className="btn-secondary text-xs py-1.5 px-3"
+                              >
+                                <Edit3 className="h-3.5 w-3.5 text-gray-600" />
+                                <span>Edit Draft</span>
+                              </button>
+                              <button
+                                onClick={() => handleRejectAction(draft._id)}
+                                disabled={isActioning}
+                                className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                              >
+                                Reject
+                              </button>
+                              <button
+                                onClick={() => handleApproveAction(draft._id)}
+                                disabled={isActioning || !isValid}
+                                title={!isValid ? 'Incomplete draft: required fields must be populated before approval' : 'Approve action'}
+                                className="btn-primary text-xs py-1.5 px-3.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isActioning ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Send className="h-3.5 w-3.5" />
+                                )}
+                                <span>Approve Action</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </motion.div>
                 );
               })}

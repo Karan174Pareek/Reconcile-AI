@@ -15,20 +15,20 @@
 
 Tested and verified live on **[reconcile-ai-server.vercel.app](https://reconcile-ai-server.vercel.app/)**:
 
-### Primary Benchmark Dataset (505 Transactions)
-- **Dataset Scale**: **505 transactions** unpacked across **16 settlement batches** and 17 bank credits.
-- **Autonomous Multi-Tier Match Rate**: **87.52%** (442 constituent orders automatically cleared).
+### Primary Benchmark Dataset (520 Transactions)
+- **Dataset Scale**: **520 transactions** unpacked across **16 settlement batches** and 17 bank credits.
+- **Autonomous Multi-Tier Match Rate**: **86.35%** (449 constituent orders automatically cleared).
 - **Level 0 (Bank-to-Settlement Tracking)**: **16 / 17 Matched (94.1%)** via UTR correlation.
 - **Level 1 (Mathematical Batch Integrity Gate)**: **15 Batches Balanced**, 1 Gateway Imbalance flagged before ledger contamination.
-- **Level 2 (Constituent Order Unpacking & Tax Breakdown)**: **442 Orders Matched**, 2.0% MDR fees and 18% GST Input Tax Credits (ITC) isolated.
-- **Execution Speed**: Full multi-tier reconciliation completes in **~2.8 seconds** on Vercel Serverless.
+- **Level 2 (Constituent Order Unpacking & Tax Breakdown)**: **449 Orders Matched**, 2.0% MDR fees and 18% GST Input Tax Credits (ITC) isolated.
+- **Execution Speed**: Full multi-tier reconciliation completes in **~5.3 ms** locally and **< 2.8 seconds** on serverless.
 - **Unit Test Suite & Coverage**: **35 / 35 passing tests** across matching heuristics, mathematical integrity gates, and edge cases.
 
-### Held-Out Validation Dataset (512 Transactions — Unseen Seed & Edge Cases)
+### Held-Out Validation Dataset (524 Transactions — Unseen Seed & Edge Cases)
 *Evaluated live via `npm run bench` on an independent held-out dataset containing partial refunds, 14-day timing gaps, duplicate UTRs, and multiple imbalanced batches:*
-- **Match Rate**: **86.13%** (441 / 512 constituent orders cleared).
+- **Match Rate**: **81.30%** (426 / 524 constituent orders cleared).
 - **False-Positive Rate (FPR)**: **0.00%** (Zero false matches committed due to Level 1 mathematical integrity gates).
-- **False-Negative Rate (FNR)**: **13.87%** (71 complex exception items routed to HITL queue).
+- **False-Negative Rate (FNR)**: **18.70%** (98 complex exception items routed to HITL queue).
 - **Reproducibility**: Run `npm run bench` to reproduce both benchmark and held-out metrics live from stdout.
 
 ---

@@ -12,15 +12,14 @@ export async function getRunAuditLogs(req, res, next) {
     const { target_type, actor, limit = 100 } = req.query;
 
     const maxLimit = Math.min(200, Math.max(1, parseInt(limit, 10) || 100));
-    let logs = [];
-
+    let mongoLogs = [];
     if (mongoose.connection.readyState === 1) {
       try {
         const query = { run_id };
         if (target_type && target_type !== 'all') query.target_type = target_type;
         if (actor && actor !== 'all') query.actor = actor;
 
-        logs = await AuditLog.find(query)
+        mongoLogs = await AuditLog.find(query)
           .sort({ timestamp: -1 })
           .limit(maxLimit)
           .lean();
@@ -29,9 +28,14 @@ export async function getRunAuditLogs(req, res, next) {
       }
     }
 
-    if (logs.length === 0) {
-      logs = MemoryStore.getAuditLogs(run_id);
-    }
+    const memoryLogs = MemoryStore.getAuditLogs(run_id);
+    const combinedMap = new Map();
+    [...mongoLogs, ...memoryLogs].forEach((l) => {
+      const key = l.id || l._id?.toString() || `${l.action}_${l.target_id}_${l.timestamp}`;
+      if (!combinedMap.has(key)) combinedMap.set(key, l);
+    });
+
+    let logs = Array.from(combinedMap.values()).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
     // If still empty, provide immutable pipeline lifecycle audit logs
     if (logs.length === 0) {

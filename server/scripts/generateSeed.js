@@ -153,7 +153,8 @@ export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026',
         batchNet += netSettled;
 
         if (!isUnrecorded) {
-          const ledgerAmount = isPartial ? grossAmount + 1500 : grossAmount; // deliberate discrepancy if partial
+          const partialOffset = isPartial ? roundTwoDecimals(grossAmount * (randomBetween(2, 8) / 100)) : 0;
+          const ledgerAmount = isPartial ? grossAmount + partialOffset : grossAmount; // randomized 2-8% discrepancy if partial
           ledgerRecords.push({
             run_id: runId,
             id: `LED-${orderId}`,

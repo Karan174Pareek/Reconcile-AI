@@ -254,7 +254,7 @@ export default function App() {
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2 }}
             >
-              <DraftActionsQueue runId={activeRunId} />
+              <DraftActionsQueue runId={activeRunId} onDraftActionUpdated={refreshRun} />
             </motion.div>
           )}
 
