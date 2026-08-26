@@ -76,8 +76,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// Temporary byte-level API key diagnostic endpoint
-app.get(['/debug-key', '/api/debug-key'], (req, res) => {
+// Health check & byte-level key diagnostic endpoint
+app.get(['/health', '/api/health'], (req, res) => {
   const rawKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '';
   const cleanedKey = rawKey.trim().replace(/^["']|["']$/g, '').trim();
 
@@ -85,30 +85,22 @@ app.get(['/debug-key', '/api/debug-key'], (req, res) => {
   const cleanHash = crypto.createHash('sha256').update(cleanedKey).digest('hex');
 
   res.json({
-    configured: !!rawKey,
-    raw_length: rawKey.length,
-    cleaned_length: cleanedKey.length,
-    has_leading_ws: /^\s/.test(rawKey),
-    has_trailing_ws: /\s$/.test(rawKey),
-    has_surrounding_quotes: /^["'].*["']$/.test(rawKey),
-    json_stringified: JSON.stringify(rawKey ? `${rawKey.slice(0, 10)}...${rawKey.slice(-6)}` : ''),
-    raw_sha256_hash: rawHash,
-    clean_sha256_hash: cleanHash,
-    is_byte_identical: rawHash === cleanHash,
-  });
-});
-
-// Health check endpoint
-app.get(['/health', '/api/health'], (req, res) => {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '';
-  res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'reconcile-ai-server',
     env_diagnostics: {
-      anthropic_configured: !!anthropicKey,
-      anthropic_key_prefix: anthropicKey ? anthropicKey.slice(0, 10) : null,
-      anthropic_key_suffix: anthropicKey ? anthropicKey.slice(-6) : null,
+      anthropic_configured: !!rawKey,
+      anthropic_key_prefix: rawKey ? rawKey.slice(0, 10) : null,
+      anthropic_key_suffix: rawKey ? rawKey.slice(-6) : null,
+      raw_length: rawKey.length,
+      cleaned_length: cleanedKey.length,
+      has_leading_ws: /^\s/.test(rawKey),
+      has_trailing_ws: /\s$/.test(rawKey),
+      has_surrounding_quotes: /^["'].*["']$/.test(rawKey),
+      json_stringified: JSON.stringify(rawKey ? `${rawKey.slice(0, 10)}...${rawKey.slice(-6)}` : ''),
+      raw_sha256_hash: rawHash,
+      clean_sha256_hash: cleanHash,
+      is_byte_identical: rawHash === cleanHash,
       node_env: process.env.NODE_ENV || 'development',
     },
   });
