@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import { connectDB } from './config/db.js';
 
 dotenv.config();
@@ -76,8 +77,6 @@ app.get('/', (req, res) => {
 });
 
 // Temporary byte-level API key diagnostic endpoint
-import crypto from 'crypto';
-
 app.get(['/debug-key', '/api/debug-key'], (req, res) => {
   const rawKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '';
   const cleanedKey = rawKey.trim().replace(/^["']|["']$/g, '').trim();
