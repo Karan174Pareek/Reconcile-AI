@@ -49,10 +49,11 @@ const randomBetween = (min, max) => Math.floor(Math.random() * (max - min + 1)) 
 const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 /**
- * Generates enterprise benchmark dataset for Razorpay Settlement Unpacking
+ * Generates enterprise benchmark or held-out dataset for Razorpay Settlement Unpacking
  */
-export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026') {
-  console.log(`\n=== Generating Enterprise Benchmark Dataset for Run: ${runId} ===`);
+export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026', options = {}) {
+  const isHeldOut = options.isHeldOut || runId.toUpperCase().includes('HELDOUT');
+  console.log(`\n=== Generating ${isHeldOut ? 'Held-Out Validation' : 'Enterprise Benchmark'} Dataset for Run: ${runId} ===`);
 
   const ledgerRecords = [];
   const settlementReports = [];
@@ -61,9 +62,9 @@ export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026')
 
   const runSlug = runId.replace(/[^a-zA-Z0-9]/g, '').slice(-8);
   const baseDate = new Date('2026-08-01T09:00:00.000Z');
-  let orderCounter = 10001;
-  let paymentCounter = 20001;
-  let setlCounter = 101;
+  let orderCounter = isHeldOut ? 50001 : 10001;
+  let paymentCounter = isHeldOut ? 60001 : 20001;
+  let setlCounter = isHeldOut ? 501 : 101;
 
   // We will generate 16 settlement batches totaling 500+ order line items
   const NUM_BATCHES = 16;
@@ -73,11 +74,15 @@ export async function generateRazorpaySeedData(runId = 'RUN-SEED-RAZORPAY-2026')
     const utrNumber = `88290${setlCounter}`;
     const utrRef = `UTR-${runSlug}-${utrNumber}`;
     const batchDayOffset = bIdx * 2; // T+2 cadence
+    
+    // In held-out mode, inject a 14-day late authorization timing gap on batch 3 and 10
+    const timingGapDays = (isHeldOut && (bIdx === 3 || bIdx === 10)) ? 14 : 2;
     const txnDate = new Date(baseDate.getTime() + batchDayOffset * 24 * 60 * 60 * 1000);
-    const settledDate = new Date(txnDate.getTime() + 2 * 24 * 60 * 60 * 1000); // T+2 settlement date
+    const settledDate = new Date(txnDate.getTime() + timingGapDays * 24 * 60 * 60 * 1000);
 
-    const isImbalancedBatch = bIdx === 7; // Deliberate test case: Batch 7 fails Level 1 integrity gate
-    const batchOrderCount = randomBetween(26, 36);
+    // In held-out mode, Batches 4 and 11 fail Level 1 integrity gate; benchmark mode fails Batch 7
+    const isImbalancedBatch = isHeldOut ? (bIdx === 4 || bIdx === 11) : (bIdx === 7);
+    const batchOrderCount = randomBetween(28, 36);
 
     let batchGross = 0;
     let batchFee = 0;

@@ -3,6 +3,7 @@ import {
   uploadCsvFiles,
   uploadMiddleware,
   generateSeedRun,
+  coldResetRun,
 } from '../controllers/ingestionController.js';
 import {
   executeRunHandler,
@@ -32,6 +33,7 @@ router.get('/:run_id/audit-log', getRunAuditLogs);
 // Ingestion endpoints
 router.post('/upload', uploadMiddleware, uploadCsvFiles);
 router.post('/generate-seed', generateSeedRun);
+router.post('/cold-reset', coldResetRun);
 
 // Pipeline execution
 router.post('/:run_id/execute', executeRunHandler);

@@ -191,6 +191,10 @@ export async function approveDraftAction(req, res, next) {
           exception_id: draft.exception_id,
           was_edited: draft.was_edited,
           dispatched_sandbox: true,
+          before_state: 'draft',
+          after_state: 'approved',
+          settlement_id: draft.settlement_id || draft.payload?.settlement_id || null,
+          order_id: draft.order_id || draft.payload?.order_id || null,
         },
       };
 

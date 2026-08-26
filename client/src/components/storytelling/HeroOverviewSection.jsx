@@ -48,6 +48,23 @@ export default function HeroOverviewSection({
     }
   };
 
+  const handleColdReset = async () => {
+    setIsGeneratingSeed(true);
+    setSeedError(null);
+    try {
+      const res = await axios.post(`${API_BASE}/runs/cold-reset`, { held_out: false });
+      if (onRunCreated) {
+        onRunCreated(res.data.run_id);
+      }
+    } catch (err) {
+      console.error('[HeroOverview] Cold Reset error:', err);
+      const msg = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'Failed cold reset run';
+      setSeedError(msg);
+    } finally {
+      setIsGeneratingSeed(false);
+    }
+  };
+
   return (
     <section id="overview" className="space-y-6 pt-2">
       {/* Hero Container */}
@@ -93,6 +110,16 @@ export default function HeroOverviewSection({
                   <span>Try with Benchmark Data (500 records)</span>
                 </>
               )}
+            </button>
+
+            <button
+              onClick={handleColdReset}
+              disabled={isGeneratingSeed}
+              className="px-4 py-3 text-sm font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors inline-flex items-center space-x-2 border border-slate-800 shadow-sm cursor-pointer disabled:opacity-50"
+              title="Reset state and execute full reconciliation pipeline live from scratch"
+            >
+              <Radio className="h-4 w-4 text-emerald-400" />
+              <span>Reset & Cold Run</span>
             </button>
 
             <button

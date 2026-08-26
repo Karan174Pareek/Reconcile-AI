@@ -18,13 +18,13 @@
 
 ---
 
-## 🎬 Act 1: The Problem (0:00 – 0:45)
+## 🎬 Act 1: The Problem & Track 04 Positioning (0:00 – 0:45)
 
-> *"Welcome to ReconcileAI. If you've ever managed fintech operations or e-commerce accounting, you know that payment gateways like Razorpay and Stripe never deposit money order-by-order. Instead, they aggregate hundreds of customer transactions into a single lump-sum payout, deducting 2% processing fees, 18% GST on fees, and customer refunds."*
+> *"Welcome to ReconcileAI. Built specifically for Razorpay Buildathon Track 04 — AI Finance Controller — ReconcileAI is a multi-source financial reconciliation engine that tackles the N-to-1 Payment Gateway Settlement Unpacking Problem."*
 >
-> *"A bank statement shows one ₹488,000 credit. Your ERP ledger shows 500 sales invoices. Traditional 1:1 matchers fail completely. Finance teams lose days in Excel, and businesses bleed money by failing to claim 18% GST Input Tax Credits."*
+> *"Payment gateways like Razorpay aggregate hundreds of customer transactions into lump-sum payouts while deducting MDR processing fees, GST, and customer refunds. Bank statements show one net credit, ERP ledgers show hundreds of sales invoices, and traditional 1:1 matchers fail."*
 >
-> *"Here is how ReconcileAI solves this autonomously."*
+> *"Track 04 demands throughput, measured accuracy, and an honest exception list. ReconcileAI delivers exact multi-source matching and differentiates on explainability and auditability — featuring 3-tier GST/MDR unpacking, a governed HITL approval loop, and a conversational forensic auditor."*
 
 ---
 
@@ -43,19 +43,23 @@
 
 ---
 
-## 🎬 Act 3: Exception Queue & Settlement Worksheet Drawer (1:45 – 2:45)
+## 🎬 Act 3: Exception Queue, Settlement Worksheet & Graceful Failure Handling (1:45 – 2:45)
 
 1. Scroll to the **Exceptions Queue** or click the **"Exceptions"** tab.
-2. Demonstrate category filtering:
+2. **Explicit Failure Handling Demo (Level 1 Integrity Gate)**:
+   - Highlight batch `setl_..._108` in **Batch Mismatches**.
+   - Show how the gateway batch stated total (₹476,028.48) failed mathematical checksum against line items (variance of ₹650.00).
+   - Point out that the **Level 1 Mathematical Integrity Gate** blocked unpacking automatically, preventing ledger contamination and safely routing the batch to the Exception Queue with complete context.
+3. Demonstrate category filtering:
    - Click **"Gateway Fees"**: Shows individual orders where the 2% fee + 18% GST was isolated.
-   - Click **"Batch Mismatches"**: Shows `setl_..._108` where the gateway's batch header failed mathematical validation by ₹650.00, protecting the ledger from corruption.
-3. Click **"Inspect Payout Worksheet"** on any settlement batch:
+   - Click **"Batch Mismatches"**: Shows flagged gateway batch integrity violations.
+4. Click **"Inspect Payout Worksheet"** on any settlement batch:
    - Walk through the interactive worksheet drawer displaying:
      - **Gross Customer Charges**: ₹488,200.00
      - **MDR Processing Fees (2.0%)**: ₹9,764.00
      - **Claimable 18% GST ITC**: ₹1,757.52
      - **Net Dispatched Payout**: ₹476,678.48
-4. Click **"Accept"** on an exception card:
+5. Click **"Accept"** on an exception card:
    - Show the **0ms optimistic update** where the card instantly transitions to **ACCEPTED** with zero UI lag.
 
 ---

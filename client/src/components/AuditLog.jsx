@@ -187,10 +187,17 @@ export default function AuditLog({ runId }) {
                         {log.target_type}
                       </span>
 
-                      {/* Target ID if present */}
-                      {log.target_id && (
-                        <span className="text-[11px] text-blue-600 font-medium font-mono">
-                          ID: {log.target_id}
+                      {/* Target ID / Batch / Order Reference */}
+                      {(log.target_id || log.details?.settlement_id || log.details?.order_id) && (
+                        <span className="text-[11px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-medium font-mono">
+                          {log.details?.settlement_id ? `Batch: ${log.details.settlement_id}` : log.details?.order_id ? `Order: ${log.details.order_id}` : `Ref: ${log.target_id}`}
+                        </span>
+                      )}
+
+                      {/* Before / After State Transition Pill */}
+                      {(log.details?.decision || log.details?.after_state) && (
+                        <span className="text-[10px] font-mono bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-200 font-bold uppercase">
+                          {log.details?.before_state || 'pending'} → {log.details?.after_state || log.details?.decision}
                         </span>
                       )}
                     </div>
