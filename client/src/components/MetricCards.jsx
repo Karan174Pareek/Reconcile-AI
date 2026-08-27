@@ -39,7 +39,7 @@ export default function MetricCards({ run }) {
   const pass2 = run?.pass2_matched || 0;
   const unresolved = run?.unresolved || 0;
   const matchRate = run?.match_rate || 0;
-  const level1Flagged = run?.level1_flagged || (unresolved > 0 ? 1 : 0);
+  const level1Flagged = typeof run?.level1_flagged === 'number' ? run.level1_flagged : 0;
   const autoMatched = (total - unresolved > 0) ? (total - unresolved) : (pass1 + pass2);
 
   const cards = [
@@ -142,7 +142,7 @@ export default function MetricCards({ run }) {
             </span>
             <span>
               {level1Flagged > 0
-                ? `${level1Flagged} Gateway Batch Imbalance Isolated (Σ Line Items != Bank Credit)`
+                ? `${level1Flagged} Gateway Batch Imbalance Isolated (Unaffected Batches Reconciled)`
                 : 'All Gateway Settlement Batches Balanced (Σ Line Items == Bank Credit)'}
             </span>
           </div>
@@ -153,7 +153,7 @@ export default function MetricCards({ run }) {
             ? 'bg-rose-100 text-rose-700 border-rose-300'
             : 'bg-emerald-100 text-emerald-700 border-emerald-300'
         }`}>
-          {level1Flagged > 0 ? 'GATEWAY HALT' : 'GATE PASSED'}
+          {level1Flagged > 0 ? 'IMBALANCE ISOLATED' : 'GATE PASSED'}
         </span>
       </div>
     </div>

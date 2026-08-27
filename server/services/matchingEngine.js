@@ -197,67 +197,84 @@ export function reconcileLevel1(settlementReports = [], settlementLineItems = []
 
   for (const setl of settlementReports) {
     const sId = setl.settlement_id || setl.id;
-    const items = itemsBySettlement.get(sId) || [];
-    const expectedBatchAmount = Number(setl.amount) || 0;
+    try {
+      const items = itemsBySettlement.get(sId) || [];
+      const expectedBatchAmount = Number(setl.amount) || 0;
 
-    let computedNetSum = 0;
-    let computedGrossSum = 0;
-    let computedFeeSum = 0;
-    let computedTaxSum = 0;
-    let computedRefundSum = 0;
+      let computedNetSum = 0;
+      let computedGrossSum = 0;
+      let computedFeeSum = 0;
+      let computedTaxSum = 0;
+      let computedRefundSum = 0;
 
-    for (const item of items) {
-      const gross = Number(item.amount) || 0;
-      const fee = Number(item.fee) || 0;
-      const tax = Number(item.tax) || 0;
-      const debit = Number(item.debit) || (fee + tax);
-      const credit = Number(item.credit) || gross;
-      const net = item.net_amount !== undefined ? Number(item.net_amount) : (credit - debit);
+      for (const item of items) {
+        const gross = Number(item.amount) || 0;
+        const fee = Number(item.fee) || 0;
+        const tax = Number(item.tax) || 0;
+        const debit = Number(item.debit) || (fee + tax);
+        const credit = Number(item.credit) || gross;
+        const net = item.net_amount !== undefined ? Number(item.net_amount) : (credit - debit);
 
-      computedNetSum += net;
-      computedGrossSum += gross;
-      computedFeeSum += fee;
-      computedTaxSum += tax;
-      if (item.type === 'refund') {
-        computedRefundSum += Math.abs(gross);
+        computedNetSum += net;
+        computedGrossSum += gross;
+        computedFeeSum += fee;
+        computedTaxSum += tax;
+        if (item.type === 'refund') {
+          computedRefundSum += Math.abs(gross);
+        }
       }
-    }
 
-    const discrepancy = Math.abs(computedNetSum - expectedBatchAmount);
-    const isBalanced = discrepancy <= (options.integrityTolerance ?? 0.05);
+      const discrepancy = Math.abs(computedNetSum - expectedBatchAmount);
+      const isBalanced = discrepancy <= (options.integrityTolerance ?? 0.05);
 
-    if (isBalanced) {
-      balancedSettlementIds.add(sId);
-      matches.push({
-        run_id: runId,
-        level: 1,
-        settlement_id: sId,
-        method: 'batch_integrity',
-        confidence: 1.0,
-        item_count: items.length,
-        total_line_items: items.length,
-        rationale: `Batch integrity verified: ${items.length} line items sum to ₹${computedNetSum.toFixed(2)} exactly balancing batch settlement ₹${expectedBatchAmount.toFixed(2)} (MDR: ₹${computedFeeSum.toFixed(2)}, GST: ₹${computedTaxSum.toFixed(2)})`,
-        variance_category: 'none',
-        variance_amount: 0,
-      });
-    } else {
+      if (isBalanced) {
+        balancedSettlementIds.add(sId);
+        matches.push({
+          run_id: runId,
+          level: 1,
+          settlement_id: sId,
+          method: 'batch_integrity',
+          confidence: 1.0,
+          item_count: items.length,
+          total_line_items: items.length,
+          rationale: `Batch integrity verified: ${items.length} line items sum to ₹${computedNetSum.toFixed(2)} exactly balancing batch settlement ₹${expectedBatchAmount.toFixed(2)} (MDR: ₹${computedFeeSum.toFixed(2)}, GST: ₹${computedTaxSum.toFixed(2)})`,
+          variance_category: 'none',
+          variance_amount: 0,
+        });
+      } else {
+        imbalancedSettlementIds.add(sId);
+        exceptions.push({
+          run_id: runId,
+          level: 1,
+          settlement_id: sId,
+          category: 'batch_imbalance',
+          expected_amount: expectedBatchAmount,
+          settled_amount: computedNetSum,
+          variance_amount: discrepancy,
+          variance_breakdown: {
+            mdr_fee: computedFeeSum,
+            gst_on_mdr: computedTaxSum,
+            refund: computedRefundSum,
+            rounding: 0,
+            unaccounted: discrepancy,
+          },
+          ai_rationale: `INTEGRITY GATE ISOLATED: Line items sum to ₹${computedNetSum.toFixed(2)} but Razorpay batch states ₹${expectedBatchAmount.toFixed(2)} (Discrepancy: ₹${discrepancy.toFixed(2)}). Unpacking blocked for batch ${sId}. Unaffected batches processed normally.`,
+          confidence: 1.0,
+          human_decision: 'pending',
+        });
+      }
+    } catch (batchErr) {
+      console.error(`[Level 1] Error processing batch ${sId}:`, batchErr.message);
       imbalancedSettlementIds.add(sId);
       exceptions.push({
         run_id: runId,
         level: 1,
         settlement_id: sId,
         category: 'batch_imbalance',
-        expected_amount: expectedBatchAmount,
-        settled_amount: computedNetSum,
-        variance_amount: discrepancy,
-        variance_breakdown: {
-          mdr_fee: computedFeeSum,
-          gst_on_mdr: computedTaxSum,
-          refund: computedRefundSum,
-          rounding: 0,
-          unaccounted: discrepancy,
-        },
-        ai_rationale: `CRITICAL INTEGRITY GATE FAILED: Line items sum to ₹${computedNetSum.toFixed(2)} but Razorpay batch states ₹${expectedBatchAmount.toFixed(2)} (Discrepancy: ₹${discrepancy.toFixed(2)}). Unpacking blocked.`,
+        expected_amount: Number(setl.amount) || 0,
+        settled_amount: 0,
+        variance_amount: Number(setl.amount) || 0,
+        ai_rationale: `Batch processing exception in ${sId}: ${batchErr.message}. Batch isolated.`,
         confidence: 1.0,
         human_decision: 'pending',
       });

@@ -10,6 +10,7 @@ import SettlementReport from '../models/SettlementReport.js';
 import SettlementLineItem from '../models/SettlementLineItem.js';
 import { generateRazorpaySeedData } from '../scripts/generateSeed.js';
 import { MemoryStore } from '../services/memoryStore.js';
+import { executeRun } from '../services/matchingEngine.js';
 import {
   BankRecordSchema,
   LedgerRecordSchema,
@@ -206,6 +207,13 @@ export async function generateSeedRun(req, res, next) {
       console.warn('[DB Write: MONGODB_SAVE_FAILED]:', mongoErr.message);
     }
 
+    try {
+      await executeRun(runId);
+      console.log(`[Generate Seed] Pipeline auto-executed for run ${runId}`);
+    } catch (execErr) {
+      console.warn(`[Generate Seed] Auto-execution warning:`, execErr.message);
+    }
+
     return res.status(201).json({
       success: true,
       message: `Razorpay Settlement Seed dataset generated for run ${runId}`,
@@ -264,9 +272,17 @@ export async function coldResetRun(req, res, next) {
       console.warn('[Cold Reset Mongo Warning]:', mongoErr.message);
     }
 
+    // Auto-execute 3-level matching pipeline so run immediately completes with real match numbers
+    try {
+      await executeRun(runId);
+      console.log(`[Cold Reset] Pipeline auto-executed for run ${runId}`);
+    } catch (execErr) {
+      console.warn(`[Cold Reset] Auto-execution warning:`, execErr.message);
+    }
+
     return res.status(200).json({
       success: true,
-      message: `Cold reset successful. New clean run ${runId} ready for evaluation.`,
+      message: `Cold reset successful. Clean run ${runId} reconciled.`,
       run_id: runId,
       stats: {
         bank_credits: data.bankRecords?.length || 0,
