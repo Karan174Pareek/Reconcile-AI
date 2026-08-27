@@ -217,7 +217,7 @@ export default function AuditLog({ runId }) {
                           </span>
                           <span className="flex items-center space-x-1">
                             <Clock className="h-3 w-3 text-slate-400" />
-                            <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                            <span>{new Date(log.timestamp).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'medium' })}</span>
                           </span>
                         </div>
                       </div>

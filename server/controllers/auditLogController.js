@@ -91,3 +91,51 @@ export async function getRunAuditLogs(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Controller: Post an audit log event with mandatory field validation
+ * POST /api/runs/:run_id/audit-log
+ */
+export async function postAuditLog(req, res, next) {
+  try {
+    const { run_id } = req.params;
+    const { actor, action, target_type, target_id, details } = req.body;
+
+    if (!actor || !action || !target_type || !target_id) {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_AUDIT_PAYLOAD',
+          message: 'Audit event payload missing mandatory fields: actor, action, target_type, and target_id are required.',
+        },
+      });
+    }
+
+    const event = {
+      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      run_id,
+      actor,
+      action,
+      target_type,
+      target_id,
+      timestamp: new Date().toISOString(),
+      details: details || {},
+    };
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await AuditLog.create(event);
+      } catch (e) {
+        console.warn('[Mongo Post AuditLog Warning]:', e.message);
+      }
+    }
+
+    MemoryStore.saveAuditLogs(run_id, [event]);
+
+    return res.status(201).json({
+      success: true,
+      data: event,
+    });
+  } catch (error) {
+    next(error);
+  }
+}

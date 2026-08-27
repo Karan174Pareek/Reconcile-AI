@@ -18,7 +18,7 @@ import {
 } from '../controllers/matchingController.js';
 import { getRunExceptions } from '../controllers/exceptionController.js';
 import { getRunDraftActions } from '../controllers/draftActionController.js';
-import { getRunAuditLogs } from '../controllers/auditLogController.js';
+import { getRunAuditLogs, postAuditLog } from '../controllers/auditLogController.js';
 import { streamAgentChat } from '../controllers/chatController.js';
 
 const router = express.Router();
@@ -31,6 +31,7 @@ router.get('/:run_id/settlements/:settlement_id', getRunSettlementDetail);
 router.get('/:run_id/exceptions', getRunExceptions);
 router.get('/:run_id/draft-actions', getRunDraftActions);
 router.get('/:run_id/audit-log', getRunAuditLogs);
+router.post('/:run_id/audit-log', postAuditLog);
 
 // Export & Report Endpoints
 router.get('/:run_id/export/journal-csv', exportRunJournalCsv);

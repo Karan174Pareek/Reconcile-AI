@@ -38,6 +38,13 @@ export async function streamAgentChat(req, res, next) {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
+  const lastUserMsg = Array.isArray(messages) ? messages[messages.length - 1]?.content : '';
+  if (!lastUserMsg || typeof lastUserMsg !== 'string' || !lastUserMsg.trim()) {
+    sendEvent({ type: 'error', message: 'Chat prompt cannot be empty or blank. Please ask a valid question.' });
+    sendEvent({ type: 'done' });
+    return res.end();
+  }
+
   try {
     let run = null;
     try {
