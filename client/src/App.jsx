@@ -216,24 +216,6 @@ export default function App() {
                     isExecuting={isExecutingPipeline}
                   />
 
-                  {/* Embedded Exception Queue Snapshot */}
-                  <div className="space-y-2.5 pt-2">
-                    <div className="flex items-center justify-between px-1">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-700">
-                        Exceptions Requiring Review
-                      </h3>
-                      <button
-                        onClick={() => setActiveTab('exceptions')}
-                        className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
-                      >
-                        View Full Exception Queue →
-                      </button>
-                    </div>
-                    <ExceptionQueue
-                      runId={activeRunId}
-                      onExceptionResolved={refreshRun}
-                    />
-                  </div>
                 </>
               )}
             </motion.div>
