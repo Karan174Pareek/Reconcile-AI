@@ -6,7 +6,6 @@ import MasterReconciliationFlow from './storytelling/MasterReconciliationFlow.js
 import MatchingEngineSection from './storytelling/MatchingEngineSection.jsx';
 import MultiPassTimeline from './storytelling/MultiPassTimeline.jsx';
 import DataTransformationSection from './storytelling/DataTransformationSection.jsx';
-import ExceptionReviewFlowSection from './storytelling/ExceptionReviewFlowSection.jsx';
 import ReconciliationResultsSection from './storytelling/ReconciliationResultsSection.jsx';
 import SystemArchitectureDiagram from './storytelling/SystemArchitectureDiagram.jsx';
 import TechnicalValidationSection from './storytelling/TechnicalValidationSection.jsx';
@@ -62,12 +61,6 @@ export default function HomeLandingView({
 
       {/* 06 — Data Transformation (Real Record Lifecycle & Schemas) */}
       <DataTransformationSection />
-
-      {/* 07 — Exception & Fallback Flow (HITL Triage & Approval Desk) */}
-      <ExceptionReviewFlowSection
-        runId={activeRun?.run_id || activeRunId}
-        onRefresh={refreshRun}
-      />
 
       {/* 08 — Reconciliation Results & Live Operations Stepper */}
       <ReconciliationResultsSection
