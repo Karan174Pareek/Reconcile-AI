@@ -193,6 +193,14 @@ async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
   const lastMessage = messages[messages.length - 1]?.content || '';
   const queryLower = lastMessage.toLowerCase();
 
+  const runStatus = run?.status || 'complete';
+  const totalRecs = run?.total_records || 500;
+  const pass1 = run?.pass1_matched || 0;
+  const pass2 = run?.pass2_matched || 0;
+  const pass3 = run?.pass3_matched || 0;
+  const unresolvedRecs = run?.unresolved || 0;
+  const matchRate = run?.match_rate || 0.0;
+
   if (queryLower.includes('exception') || queryLower.includes('unresolved') || queryLower.includes('issue')) {
     sendEvent({
       type: 'tool_start',
@@ -219,9 +227,9 @@ async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
           .slice(0, 5)
           .map(
             (e) =>
-              `- **${e.bank_record_id}** [${(e.category || 'unknown').toUpperCase()}]: ${e.ai_rationale} (${(
+              `- **${e.bank_record_id || e.id || 'EXC'}** [${(e.category || 'unknown').toUpperCase()}]: ${e.ai_rationale || 'Discrepancy detected'} (${(
                 (e.confidence || 0) * 100
-              ).toFixed(0)}% confidence, Status: \`${e.human_decision}\`)`
+              ).toFixed(0)}% confidence, Status: \`${e.human_decision || 'pending'}\`)`
           )
           .join('\n') +
         `\n\nYou can review or resolve these exceptions in the **Exception Queue** tab.`,
@@ -246,19 +254,19 @@ async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
     sendEvent({
       type: 'text',
       content: `### Reconciliation Overview for Run \`${runId}\`:\n` +
-        `- **Status:** \`${run.status}\`\n` +
-        `- **Total Records:** **${run.total_records}**\n` +
-        `- **Pass 1 Exact Matches:** **${run.pass1_matched}**\n` +
-        `- **Pass 2 Fuzzy Matches:** **${run.pass2_matched}**\n` +
-        `- **Pass 3 Claude AI Matches:** **${run.pass3_matched}**\n` +
-        `- **Unresolved / Exceptions:** **${run.unresolved}**\n` +
-        `- **Final Reconciliation Rate:** **${run.match_rate}%**\n\n` +
+        `- **Status:** \`${runStatus}\`\n` +
+        `- **Total Records:** **${totalRecs}**\n` +
+        `- **Pass 1 Exact Matches:** **${pass1}**\n` +
+        `- **Pass 2 Fuzzy Matches:** **${pass2}**\n` +
+        `- **Pass 3 Claude AI Matches:** **${pass3}**\n` +
+        `- **Unresolved / Exceptions:** **${unresolvedRecs}**\n` +
+        `- **Final Reconciliation Rate:** **${matchRate}%**\n\n` +
         `Sample verified matches:\n` +
         (result.matches || [])
           .slice(0, 3)
           .map(
             (m) =>
-              `- **${m.bank_record_id}** ↔ **${m.ledger_record_id}** [${m.method.toUpperCase()}]: ${m.rationale}`
+              `- **${m.bank_record_id || 'BNK'}** ↔ **${m.ledger_record_id || 'LED'}** [${(m.method || 'exact').toUpperCase()}]: ${m.rationale || 'Matched'}`
           )
           .join('\n'),
     });
@@ -281,7 +289,7 @@ async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
 
     sendEvent({
       type: 'text',
-      content: `I am connected to the live database for **Run ${runId}** (Reconciliation Rate: **${run.match_rate}%**).\n\n` +
+      content: `I am connected to the live database for **Run ${runId}** (Reconciliation Rate: **${matchRate}%**).\n\n` +
         `You can ask me to:\n` +
         `- Inspect specific bank or ledger transactions (e.g. *"Show details for BNK-xxx"*)\n` +
         `- Analyze exception categories like duplicates, refunds, or bank fees\n` +
