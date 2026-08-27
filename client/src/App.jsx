@@ -11,6 +11,7 @@ import ExceptionQueue from './components/ExceptionQueue.jsx';
 import DraftActionsQueue from './components/DraftActionsQueue.jsx';
 import AuditLog from './components/AuditLog.jsx';
 import AgentChat from './components/AgentChat.jsx';
+import BusinessImpactPanel from './components/BusinessImpactPanel.jsx';
 import { useRunSocket } from './hooks/useRunSocket.js';
 import {
   Layers,
@@ -114,8 +115,12 @@ export default function App() {
         {/* Agent Chat Slide-over Drawer */}
         <AgentChat
           runId={activeRunId}
+          run={runData}
           isOpen={isChatOpen}
           onClose={() => setIsChatOpen(false)}
+          onNavigateToRef={(refId) => {
+            setActiveTab('exceptions');
+          }}
         />
 
         {/* Upload Modal */}
@@ -195,6 +200,9 @@ export default function App() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Business Impact & Tax Summary Panel */}
+                  <BusinessImpactPanel run={runData} />
 
                   {/* 4 Prioritized Metric Cards */}
                   <MetricCards run={runData} />

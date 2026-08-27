@@ -11,6 +11,7 @@ import ReconciliationResultsSection from './storytelling/ReconciliationResultsSe
 import SystemArchitectureDiagram from './storytelling/SystemArchitectureDiagram.jsx';
 import TechnicalValidationSection from './storytelling/TechnicalValidationSection.jsx';
 import SystemOverviewMapSection from './storytelling/SystemOverviewMapSection.jsx';
+import BusinessImpactPanel from './BusinessImpactPanel.jsx';
 
 export default function HomeLandingView({
   runs = [],
@@ -43,6 +44,9 @@ export default function HomeLandingView({
         onOpenExplainer={onOpenExplainer}
         onRunCreated={onRunCreated}
       />
+
+      {/* Financial Controller Business Impact & Tax Summary */}
+      <BusinessImpactPanel run={activeRun} />
 
       {/* 02 — How ReconcileAI Works (Visual Pipeline Intro) */}
       <HowItWorksFlowchart />

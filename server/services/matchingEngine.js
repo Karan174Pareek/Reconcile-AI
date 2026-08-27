@@ -750,6 +750,11 @@ export async function executeRun(runId, options = {}) {
     const unresolved = Math.max(0, totalRecords - level2Matched);
     const matchRate = totalRecords > 0 ? Math.round((level2Matched / totalRecords) * 10000) / 100 : 0.0;
 
+    // Calculate Business Impact Figures across matched unpacked line items
+    const totalGstItc = settlementLineItems.reduce((sum, item) => sum + (Number(item.tax) || 0), 0);
+    const totalSettlementVal = settlementLineItems.reduce((sum, item) => sum + (Number(item.net_amount) || Number(item.amount) || 0), 0);
+    const estimatedManualHours = Math.round(((totalRecords * 2) / 60) * 10) / 10;
+
     // Headline metrics use the line-item universe so that
     // pass1_matched + pass2_matched + pass3_matched + unresolved === total_records.
     run.total_records = totalRecords;
@@ -758,6 +763,12 @@ export async function executeRun(runId, options = {}) {
     run.pass3_matched = 0; // populated later by Pass 3 (executePass3)
     run.unresolved = unresolved;
     run.match_rate = matchRate;
+
+    // Business Impact Metrics
+    run.total_gst_itc = Math.round(totalGstItc * 100) / 100;
+    run.total_settlement_value = Math.round(totalSettlementVal * 100) / 100;
+    run.estimated_manual_hours = estimatedManualHours;
+
     // Batch-level 3-level engine stats (distinct universe from line items).
     run.level0_total = bankRecords.length;
     run.level0_matched = l0.matches.length;

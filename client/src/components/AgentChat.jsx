@@ -16,25 +16,56 @@ const API_BASE = import.meta.env.VITE_SERVER_URL
   ? `${import.meta.env.VITE_SERVER_URL}/api`
   : '/api';
 
-const QUICK_PROMPTS = [
-  'Why does settlement batch setl_... have a batch imbalance?',
-  'What is our total claimable GST Input Tax Credit (18%) this cycle?',
-  'List all unrecorded Razorpay orders settled without ledger entries',
-  'Show MDR fee breakdown across all balanced settlement batches',
-];
-
-export default function AgentChat({ runId, isOpen, onClose }) {
+export default function AgentChat({ runId, run, isOpen, onClose, onNavigateToRef }) {
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Hello! I am your **ReconcileAI Forensic Assistant**. I have read-only access to inspect your settlement batches, batch balance integrity, unpacked order line items, MDR fee variances, and GST tax credits for **Run ${runId || 'N/A'}**.\n\nWhat would you like to inspect?`,
+      content: `Hello! I am your **ReconcileAI Forensic Assistant**. I have real-time read-only access to inspect your settlement batches, batch balance integrity, unpacked order line items, MDR fee variances, and GST tax credits for **Run ${runId || 'N/A'}**.\n\nWhat would you like to inspect?`,
       tools: [],
     },
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Derive dynamic suggested prompt chips from actual run data
+  const dynamicPrompts = [
+    `Why does settlement batch setl_001 have a batch imbalance?`,
+    `What is our total claimable GST Input Tax Credit (18%) for Run ${runId || 'current'}?`,
+    `List all unrecorded Razorpay orders settled without ledger entries`,
+    `Show MDR fee breakdown across unpacked settlement line items`,
+  ];
+
+  // Helper: Render message content with clickable reference citations
+  const renderMessageContent = (text, isUser) => {
+    if (!text) return null;
+    if (isUser) return text;
+
+    const citationRegex = /(setl_[a-zA-Z0-9_-]+|ord_[a-zA-Z0-9_-]+|pay_[a-zA-Z0-9_-]+|exc_[a-zA-Z0-9_-]+)/g;
+    const parts = text.split(citationRegex);
+
+    return parts.map((part, idx) => {
+      if (citationRegex.test(part)) {
+        return (
+          <button
+            key={idx}
+            onClick={() => {
+              if (onNavigateToRef) {
+                onNavigateToRef(part);
+              }
+              onClose();
+            }}
+            className="inline-flex items-center space-x-1 px-1.5 py-0.5 my-0.5 mx-0.5 rounded bg-blue-50 hover:bg-blue-100 text-[#0B72E7] font-mono text-[11px] font-semibold border border-blue-200 cursor-pointer transition-colors shadow-2xs"
+            title={`Click to inspect record ${part}`}
+          >
+            <span>{part}</span>
+          </button>
+        );
+      }
+      return part;
+    });
+  };
 
   // Dynamically synchronize welcome message with the active runId
   useEffect(() => {
@@ -325,11 +356,11 @@ export default function AgentChat({ runId, isOpen, onClose }) {
                       <div
                         className={`p-3 rounded-xl text-xs leading-relaxed max-w-[90%] whitespace-pre-wrap ${
                           isUser
-                            ? 'bg-blue-600 text-white font-medium rounded-br-none shadow-sm'
-                            : 'bg-gray-50 border border-gray-200 text-gray-900 rounded-bl-none shadow-sm'
+                            ? 'bg-[#0B72E7] text-white font-medium rounded-br-none shadow-2xs'
+                            : 'bg-slate-50 border border-slate-200 text-slate-900 rounded-bl-none shadow-2xs'
                         }`}
                       >
-                        {msg.content}
+                        {renderMessageContent(msg.content, isUser)}
                       </div>
                     )}
                   </div>
@@ -337,7 +368,7 @@ export default function AgentChat({ runId, isOpen, onClose }) {
               })}
 
               {isStreaming && (
-                <div className="flex items-center space-x-2 text-xs text-blue-600 font-mono italic">
+                <div className="flex items-center space-x-2 text-xs text-[#0B72E7] font-mono italic">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   <span>Inspecting reconciliation database...</span>
                 </div>
@@ -346,16 +377,16 @@ export default function AgentChat({ runId, isOpen, onClose }) {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Quick Prompts */}
+            {/* Dynamic Suggested Question Chips */}
             {messages.length <= 2 && (
-              <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-200 space-y-1.5">
-                <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Suggested Questions:</div>
+              <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 space-y-1.5">
+                <div className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">Suggested Questions for Run {runId || 'Active'}:</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {QUICK_PROMPTS.map((p, idx) => (
+                  {dynamicPrompts.map((p, idx) => (
                     <button
                       key={idx}
                       onClick={() => handleSendMessage(p)}
-                      className="text-[11px] bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-md px-2.5 py-1 text-left transition-colors cursor-pointer"
+                      className="text-[11px] bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-md px-2.5 py-1 text-left transition-all cursor-pointer font-sans shadow-2xs"
                     >
                       {p}
                     </button>

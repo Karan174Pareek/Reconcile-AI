@@ -68,6 +68,18 @@ const RunSchema = new mongoose.Schema(
       type: Number,
       default: 0, // constituent order line items reconciled (deterministic + AI)
     },
+    total_gst_itc: {
+      type: Number,
+      default: 0.0, // sum of 18% GST on 2% MDR across matched unpacked line items
+    },
+    total_settlement_value: {
+      type: Number,
+      default: 0.0, // sum of net settlement amounts processed across batches
+    },
+    estimated_manual_hours: {
+      type: Number,
+      default: 0.0, // estimated manual review hours (assuming 2 min / transaction)
+    },
     created_at: {
       type: Date,
       default: Date.now,

@@ -13,6 +13,8 @@ import {
   listRuns,
   listRunSettlements,
   getRunSettlementDetail,
+  exportRunJournalCsv,
+  exportRunAuditCertificate,
 } from '../controllers/matchingController.js';
 import { getRunExceptions } from '../controllers/exceptionController.js';
 import { getRunDraftActions } from '../controllers/draftActionController.js';
@@ -29,6 +31,10 @@ router.get('/:run_id/settlements/:settlement_id', getRunSettlementDetail);
 router.get('/:run_id/exceptions', getRunExceptions);
 router.get('/:run_id/draft-actions', getRunDraftActions);
 router.get('/:run_id/audit-log', getRunAuditLogs);
+
+// Export & Report Endpoints
+router.get('/:run_id/export/journal-csv', exportRunJournalCsv);
+router.get('/:run_id/export/audit-certificate', exportRunAuditCertificate);
 
 // Ingestion endpoints
 router.post('/upload', uploadMiddleware, uploadCsvFiles);
