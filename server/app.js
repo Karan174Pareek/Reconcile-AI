@@ -79,15 +79,15 @@ app.get('/', (req, res) => {
 // Health check endpoint
 app.get(['/health', '/api/health'], (req, res) => {
   const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '';
+  const isVercelProd = process.env.VERCEL_ENV === 'production' || (process.env.VERCEL === '1' && process.env.NODE_ENV !== 'development');
+  const nodeEnv = process.env.NODE_ENV || (isVercelProd ? 'production' : 'development');
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'reconcile-ai-server',
     env_diagnostics: {
       anthropic_configured: !!anthropicKey,
-      anthropic_key_prefix: anthropicKey ? anthropicKey.slice(0, 10) : null,
-      anthropic_key_suffix: anthropicKey ? anthropicKey.slice(-6) : null,
-      node_env: process.env.NODE_ENV || 'development',
+      node_env: nodeEnv,
     },
   });
 });
