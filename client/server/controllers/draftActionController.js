@@ -101,19 +101,10 @@ export async function approveDraftAction(req, res, next) {
     }
 
     if (!draft) {
-      if (id.startsWith('draft_')) {
-        const parts = id.split('_');
-        const extractedRunId = parts.slice(1, -1).join('_');
-        if (extractedRunId) {
-          await MemoryStore.ensureRunHydrated(extractedRunId);
-          ensureGeneratedDrafts(extractedRunId);
-        }
-      }
-
       const allRuns = MemoryStore.listRuns();
       for (const r of allRuns) {
         const list = MemoryStore.getDraftActions(r.run_id);
-        const match = list.find((d) => d._id === id || d.id === id || d.exception_id === id);
+        const match = list.find((d) => String(d._id) === String(id) || String(d.id) === String(id) || String(d.exception_id) === String(id));
         if (match) {
           draft = match;
           break;
@@ -155,10 +146,25 @@ export async function approveDraftAction(req, res, next) {
       draft.edited_content = edited_content;
     }
 
-    if (typeof draft.save === 'function' && mongoose.connection.readyState === 1) {
+    if (typeof draft.save === 'function') {
       try {
         await draft.save();
         console.log(`[DB Write: MONGODB_PRIMARY] Draft Action ${id} approved in MongoDB Atlas.`);
+      } catch (e) {
+        console.warn('[Mongo Save Draft Warning]:', e.message);
+      }
+    } else if (mongoose.connection.readyState === 1) {
+      try {
+        const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { exception_id: id };
+        await DraftAction.updateOne(query, {
+          $set: {
+            status: 'approved',
+            executed_at: draft.executed_at,
+            was_edited: draft.was_edited || false,
+            edited_content: draft.edited_content || null,
+          },
+        });
+        console.log(`[DB Write: MONGODB_PRIMARY] Draft Action ${id} updated in MongoDB Atlas.`);
       } catch (e) {
         console.warn('[Mongo Save Draft Warning]:', e.message);
       }
@@ -167,7 +173,7 @@ export async function approveDraftAction(req, res, next) {
     // Persist updated draft in MemoryStore for high-availability idempotency
     if (draft.run_id) {
       const list = MemoryStore.getDraftActions(draft.run_id);
-      const existingIdx = list.findIndex((d) => d._id === id || d.id === id || d.exception_id === id);
+      const existingIdx = list.findIndex((d) => String(d._id) === String(id) || String(d.id) === String(id) || String(d.exception_id) === String(id));
       if (existingIdx >= 0) {
         list[existingIdx] = draft;
       } else {
@@ -247,19 +253,10 @@ export async function rejectDraftAction(req, res, next) {
     }
 
     if (!draft) {
-      if (id.startsWith('draft_')) {
-        const parts = id.split('_');
-        const extractedRunId = parts.slice(1, -1).join('_');
-        if (extractedRunId) {
-          await MemoryStore.ensureRunHydrated(extractedRunId);
-          ensureGeneratedDrafts(extractedRunId);
-        }
-      }
-
       const allRuns = MemoryStore.listRuns();
       for (const r of allRuns) {
         const list = MemoryStore.getDraftActions(r.run_id);
-        const match = list.find((d) => d._id === id || d.id === id || d.exception_id === id);
+        const match = list.find((d) => String(d._id) === String(id) || String(d.id) === String(id) || String(d.exception_id) === String(id));
         if (match) {
           draft = match;
           break;
@@ -295,15 +292,29 @@ export async function rejectDraftAction(req, res, next) {
     const actor = user_email || 'human_auditor';
     draft.status = 'rejected';
 
-    if (typeof draft.save === 'function' && mongoose.connection.readyState === 1) {
+    if (mongoose.connection.readyState === 1) {
       try {
-        await draft.save();
+        const updated = await DraftAction.findOneAndUpdate(
+          { $or: [{ _id: id }, { id: id }, { exception_id: id }] },
+          { $set: { status: 'rejected' } },
+          { upsert: true, new: true }
+        );
+        if (updated) draft = updated;
       } catch (e) {
         console.warn('[Mongo Save Draft Warning]:', e.message);
       }
     }
 
     if (draft.run_id) {
+      const list = MemoryStore.getDraftActions(draft.run_id);
+      const existingIdx = list.findIndex((d) => String(d._id) === String(id) || String(d.id) === String(id) || String(d.exception_id) === String(id));
+      if (existingIdx >= 0) {
+        list[existingIdx] = draft;
+      } else {
+        list.push(draft);
+      }
+      MemoryStore.saveDraftActions(draft.run_id, list);
+
       const auditEntry = {
         id: `audit_${Date.now()}`,
         run_id: draft.run_id,

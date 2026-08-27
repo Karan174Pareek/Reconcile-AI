@@ -28,14 +28,7 @@ export async function getRunAuditLogs(req, res, next) {
       }
     }
 
-    const memoryLogs = MemoryStore.getAuditLogs(run_id);
-    const combinedMap = new Map();
-    [...mongoLogs, ...memoryLogs].forEach((l) => {
-      const key = l.id || l._id?.toString() || `${l.action}_${l.target_id}_${l.timestamp}`;
-      if (!combinedMap.has(key)) combinedMap.set(key, l);
-    });
-
-    let logs = Array.from(combinedMap.values()).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    let logs = mongoLogs.length > 0 ? mongoLogs : MemoryStore.getAuditLogs(run_id);
 
     // If still empty, provide immutable pipeline lifecycle audit logs
     if (logs.length === 0) {

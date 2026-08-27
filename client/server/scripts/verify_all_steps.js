@@ -98,6 +98,14 @@ async function verifyAll() {
     console.log('     • run.unresolved:', updatedRun.unresolved);
     console.log('     • Partition Check:', `${updatedRun.pass1_matched} + ${updatedRun.pass2_matched} + ${updatedRun.pass3_matched} + ${updatedRun.unresolved} === ${updatedRun.total_records}`, `(${updatedRun.pass1_matched + updatedRun.pass2_matched + updatedRun.pass3_matched + updatedRun.unresolved === updatedRun.total_records ? 'VALID' : 'INVALID'})`);
 
+    const partitionSum = updatedRun.pass1_matched + updatedRun.pass2_matched + updatedRun.pass3_matched + updatedRun.unresolved;
+    if (partitionSum !== updatedRun.total_records) {
+      throw new Error(`Partition check failed: ${partitionSum} !== ${updatedRun.total_records}`);
+    }
+    if (updatedRun.match_rate < 0 || updatedRun.match_rate > 100) {
+      throw new Error(`Match rate out of bounds: ${updatedRun.match_rate}%`);
+    }
+
     if (updatedRun.ai_mode !== 'live') {
       throw new Error(`Expected run.ai_mode to be 'live', got '${updatedRun.ai_mode}'`);
     }

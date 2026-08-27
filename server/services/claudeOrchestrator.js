@@ -402,7 +402,7 @@ export async function executePass3(runId, options = {}) {
     const memLines = MemoryStore.getSettlementLineItems(runId);
     if (memLines.length > 0) {
       lineItemCount = memLines.length;
-      pendingLineItems = memLines.filter((li) => li.unpacked_status !== 'matched');
+      pendingLineItems = memLines.filter((li) => li.unpacked_status !== 'unpacked' && li.unpacked_status !== 'matched');
       availableLedgerRecords = MemoryStore.getLedgerRecords(runId).filter((l) => l.status !== 'matched');
     }
   }
@@ -427,9 +427,11 @@ export async function executePass3(runId, options = {}) {
         status: run.status,
         ai_mode: aiMode,
         message: 'All settlement line items already unpacked and reconciled.',
-        pass3_matched: 0,
-        unresolved: run.unresolved,
-        match_rate: run.match_rate,
+        pass1_matched: run.pass1_matched || 0,
+        pass2_matched: run.pass2_matched || 0,
+        pass3_matched: run.pass3_matched || 0,
+        unresolved: run.unresolved || 0,
+        match_rate: run.match_rate || 0.0,
       };
     }
 
@@ -567,15 +569,36 @@ export async function executePass3(runId, options = {}) {
     }
 
     if (newMatches.length > 0) {
-      await Match.insertMany(newMatches, { ordered: false });
-      await SettlementLineItem.updateMany(
-        { run_id: runId, payment_id: { $in: matchedLineItemIds } },
-        { $set: { unpacked_status: 'matched' } }
-      );
-      await LedgerRecord.updateMany(
-        { run_id: runId, id: { $in: matchedLedgerIds } },
-        { $set: { status: 'matched' } }
-      );
+      if (mongoose.connection.readyState === 1) {
+        try {
+          await Match.insertMany(newMatches, { ordered: false });
+          await SettlementLineItem.updateMany(
+            { run_id: runId, payment_id: { $in: matchedLineItemIds } },
+            { $set: { unpacked_status: 'matched' } }
+          );
+          await LedgerRecord.updateMany(
+            { run_id: runId, id: { $in: matchedLedgerIds } },
+            { $set: { status: 'matched' } }
+          );
+        } catch (dbErr) {
+          console.warn('[Mongo Pass 3 Insert Warning]:', dbErr.message);
+        }
+      }
+
+      // Sync in-memory MemoryStore records
+      const memLines = MemoryStore.getSettlementLineItems(runId);
+      memLines.forEach((li) => {
+        if (matchedLineItemIds.includes(li.payment_id)) {
+          li.unpacked_status = 'matched';
+        }
+      });
+
+      const memLedgers = MemoryStore.getLedgerRecords(runId);
+      memLedgers.forEach((lr) => {
+        if (matchedLedgerIds.includes(lr.id || lr._id?.toString())) {
+          lr.status = 'matched';
+        }
+      });
     }
 
     if (newExceptions.length > 0) {
@@ -604,13 +627,38 @@ export async function executePass3(runId, options = {}) {
       }
     }
 
-    // Recalculate Run metrics
-    const totalLineItems = await SettlementLineItem.countDocuments({ run_id: runId });
-    const totalMatched = await Match.countDocuments({ run_id: runId, level: 2 });
-    const unresolved = Math.max(0, totalLineItems - totalMatched);
-    const matchRate = totalLineItems > 0 ? Math.round((totalMatched / totalLineItems) * 10000) / 100 : 0.0;
+    // Recalculate Run metrics strictly within the single line-item population
+    let pass1 = run.pass1_matched || 0;
+    let pass2 = run.pass2_matched || 0;
+    let pass3 = pass3MatchesCount;
 
-    run.pass3_matched = pass3MatchesCount;
+    if (mongoose.connection.readyState === 1) {
+      const p1Count = await Match.countDocuments({ run_id: runId, level: 2, method: { $in: ['exact', 'deterministic'] } });
+      const p2Count = await Match.countDocuments({ run_id: runId, method: 'fuzzy' });
+      const p3Count = await Match.countDocuments({ run_id: runId, method: { $in: ['ai', 'heuristic'] } });
+
+      if (p1Count > 0) pass1 = p1Count;
+      if (p2Count > 0) pass2 = p2Count;
+      if (p3Count > 0) pass3 = p3Count;
+    }
+
+    const totalRecords = run.total_records || lineItemCount;
+    const totalMatched = pass1 + pass2 + pass3;
+    const unresolved = Math.max(0, totalRecords - totalMatched);
+    const matchRate = totalRecords > 0 ? Math.round((totalMatched / totalRecords) * 10000) / 100 : 0.0;
+
+    // Runtime Sanity Assertion
+    if (matchRate < 0 || matchRate > 100) {
+      throw new Error(`[CRITICAL METRIC BUG] Calculated matchRate (${matchRate}%) is out of valid bounds [0, 100]. Total records: ${totalRecords}, matched: ${totalMatched}`);
+    }
+    if (totalMatched + unresolved !== totalRecords) {
+      throw new Error(`[CRITICAL METRIC BUG] Partition invariant violated: ${pass1} + ${pass2} + ${pass3} + ${unresolved} !== ${totalRecords}`);
+    }
+
+    run.total_records = totalRecords;
+    run.pass1_matched = pass1;
+    run.pass2_matched = pass2;
+    run.pass3_matched = pass3;
     run.level2_matched = totalMatched;
     run.unresolved = unresolved;
     run.match_rate = matchRate;
@@ -623,7 +671,9 @@ export async function executePass3(runId, options = {}) {
       run_id: runId,
       status: run.status,
       ai_mode: aiMode,
-      pass3_matched: pass3MatchesCount,
+      pass1_matched: pass1,
+      pass2_matched: pass2,
+      pass3_matched: pass3,
       total_matched: totalMatched,
       unresolved,
       match_rate: matchRate,

@@ -749,11 +749,11 @@ export async function executeRun(runId, options = {}) {
           l1.imbalancedSettlementIds.length > 0
             ? SettlementReport.updateMany({ run_id: runId, settlement_id: { $in: l1.imbalancedSettlementIds } }, { $set: { integrity_status: 'imbalanced' } })
             : Promise.resolve(),
-          l2.matchedLineItemIds.length > 0
-            ? SettlementLineItem.updateMany({ run_id: runId, payment_id: { $in: l2.matchedLineItemIds } }, { $set: { unpacked_status: 'matched' } })
+          l2.matchedLineItemIds && (l2.matchedLineItemIds.size > 0 || l2.matchedLineItemIds.length > 0)
+            ? SettlementLineItem.updateMany({ run_id: runId, payment_id: { $in: Array.from(l2.matchedLineItemIds) } }, { $set: { unpacked_status: 'matched' } })
             : Promise.resolve(),
-          l2.matchedLedgerIds.length > 0
-            ? LedgerRecord.updateMany({ run_id: runId, id: { $in: l2.matchedLedgerIds } }, { $set: { status: 'matched' } })
+          l2.matchedLedgerIds && (l2.matchedLedgerIds.size > 0 || l2.matchedLedgerIds.length > 0)
+            ? LedgerRecord.updateMany({ run_id: runId, id: { $in: Array.from(l2.matchedLedgerIds) } }, { $set: { status: 'matched' } })
             : Promise.resolve(),
         ]);
       } catch (dbErr) {
@@ -761,11 +761,34 @@ export async function executeRun(runId, options = {}) {
       }
     }
 
+    // Sync in-memory MemoryStore records with matched statuses to guarantee zero-drift state
+    const memLineItems = MemoryStore.getSettlementLineItems(runId);
+    memLineItems.forEach((li) => {
+      if (l2.matchedLineItemIds && l2.matchedLineItemIds.has(li.payment_id)) {
+        li.unpacked_status = 'matched';
+      }
+    });
+
+    const memLedgerRecords = MemoryStore.getLedgerRecords(runId);
+    memLedgerRecords.forEach((lr) => {
+      if (l2.matchedLedgerIds && l2.matchedLedgerIds.has(lr.id || lr._id?.toString())) {
+        lr.status = 'matched';
+      }
+    });
+
     const totalRecords = settlementLineItems.length;
     const level2Matched = l2.matches.length;
     const level1Flagged = l1.exceptions.filter((e) => e.category === 'batch_imbalance').length;
     const unresolved = Math.max(0, totalRecords - level2Matched);
     const matchRate = totalRecords > 0 ? Math.round((level2Matched / totalRecords) * 10000) / 100 : 0.0;
+
+    // Runtime Sanity Guard
+    if (matchRate < 0 || matchRate > 100) {
+      throw new Error(`[CRITICAL METRIC BUG] Calculated matchRate (${matchRate}%) is out of valid bounds [0, 100]. Total records: ${totalRecords}`);
+    }
+    if (level2Matched + unresolved !== totalRecords) {
+      throw new Error(`[CRITICAL METRIC BUG] Partition invariant violated: ${level2Matched} + 0 + 0 + ${unresolved} !== ${totalRecords}`);
+    }
 
     // Calculate Business Impact Figures across matched unpacked line items
     const totalGstItc = settlementLineItems.reduce((sum, item) => sum + (Number(item.tax) || 0), 0);

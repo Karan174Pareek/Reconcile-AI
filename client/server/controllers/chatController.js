@@ -45,8 +45,9 @@ export async function streamAgentChat(req, res, next) {
     return res.end();
   }
 
+  let run = null;
+
   try {
-    let run = null;
     try {
       if (mongoose.connection.readyState === 1) {
         run = await Run.findOne({ run_id }).lean();
