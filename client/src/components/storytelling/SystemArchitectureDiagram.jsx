@@ -75,29 +75,28 @@ export default function SystemArchitectureDiagram() {
 
   return (
     <section id="architecture" className="space-y-6">
-      <div className="card-base p-6 sm:p-8 bg-[#02042B] border border-slate-800 text-white shadow-card space-y-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="card-base p-6 sm:p-8 bg-white border border-slate-200 shadow-sm space-y-6">
         {/* Section Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-800/80 relative z-10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-200">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-400 bg-cyan-950/80 px-2.5 py-0.5 rounded-full border border-cyan-800/80">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
                 09 • SYSTEM ARCHITECTURE
               </span>
-              <span className="text-xs font-mono text-slate-400">FULL-STACK TOPOLOGY GRAPH</span>
+              <span className="text-xs font-mono text-slate-500">FULL-STACK TOPOLOGY GRAPH</span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight mt-1">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mt-1">
               End-to-End System Components & Communication
             </h2>
           </div>
 
-          <span className="text-xs font-mono text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800 self-start sm:self-auto">
+          <span className="text-xs font-mono text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 self-start sm:self-auto">
             Click any layer to inspect subsystem specifications
           </span>
         </div>
 
         {/* Architecture Node Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 relative z-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {ARCHITECTURE_NODES.map((node) => {
             const Icon = node.icon;
             const isSelected = selectedNodeId === node.id;
@@ -107,27 +106,36 @@ export default function SystemArchitectureDiagram() {
                 onClick={() => setSelectedNodeId(node.id)}
                 className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                   isSelected
-                    ? 'border-blue-500 bg-blue-950/70 ring-2 ring-blue-500/40 shadow-xs text-white'
-                    : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-900 text-slate-300'
+                    ? 'border-[#0B72E7] bg-blue-50/70 ring-2 ring-[#0B72E7]/25 shadow-xs text-slate-900'
+                    : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-100/70 text-slate-700'
                 }`}
               >
-                <div className="space-y-2 mb-3">
+                <div className="space-y-2.5 mb-3">
                   <div className="flex items-center justify-between">
-                    <div className={`p-2 rounded-lg border ${isSelected ? 'bg-[#0B72E7] text-white border-[#0B72E7]' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
+                    <div className={`p-2 rounded-lg border ${isSelected ? 'bg-[#0B72E7] text-white border-[#0B72E7] shadow-2xs' : 'bg-white border-slate-200 text-slate-700 shadow-2xs'}`}>
                       <Icon className="h-4 w-4" />
                     </div>
-                    <span className="text-[10px] font-mono uppercase text-slate-400">LAYER</span>
+                    <span className="text-[10px] font-mono font-bold uppercase text-slate-400">LAYER</span>
                   </div>
 
                   <div>
-                    <h4 className="text-xs font-bold text-white leading-tight">{node.title}</h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{node.subtitle}</p>
+                    <h4 className="text-xs font-bold text-slate-900 leading-tight">{node.title}</h4>
+                    <p className={`text-[11px] mt-0.5 line-clamp-1 font-medium ${isSelected ? 'text-blue-700' : 'text-slate-500'}`}>
+                      {node.subtitle}
+                    </p>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800/60 flex flex-wrap gap-1">
+                <div className="pt-2.5 border-t border-slate-200/80 flex flex-wrap gap-1">
                   {node.tags.slice(0, 2).map((tag, i) => (
-                    <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/60">
+                    <span
+                      key={i}
+                      className={`text-[9px] font-mono font-semibold px-2 py-0.5 rounded-full border ${
+                        isSelected
+                          ? 'bg-blue-100 text-blue-800 border-blue-200'
+                          : 'bg-slate-200/70 text-slate-700 border-slate-300/60'
+                      }`}
+                    >
                       {tag}
                     </span>
                   ))}
@@ -145,28 +153,28 @@ export default function SystemArchitectureDiagram() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.15 }}
-            className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-4 relative z-10"
+            className="p-5 rounded-xl bg-[#02042B] text-white border border-slate-800 space-y-4 shadow-md"
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
               <div className="flex items-center space-x-3">
-                <div className="p-2 rounded-lg bg-[#0B72E7] text-white shadow-xs">
+                <div className="p-2.5 rounded-lg bg-[#0B72E7] text-white shadow-xs">
                   <selectedNode.icon className="h-5 w-5" />
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-white">{selectedNode.title}</h4>
-                  <p className="text-xs text-slate-300 mt-0.5">{selectedNode.details}</p>
+                  <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">{selectedNode.details}</p>
                 </div>
               </div>
 
-              <div className="text-xs font-mono text-cyan-400 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 self-start sm:self-auto">
+              <div className="text-xs font-mono text-cyan-300 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700 font-semibold self-start sm:self-auto shrink-0">
                 {selectedNode.telemetry}
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 text-xs font-mono">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
               <span className="text-slate-400 uppercase font-semibold mr-1">Stack Modules:</span>
               {selectedNode.tags.map((t, i) => (
-                <span key={i} className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-200">
+                <span key={i} className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-100 font-medium">
                   {t}
                 </span>
               ))}
