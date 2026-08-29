@@ -81,7 +81,7 @@ export default function SystemArchitectureDiagram() {
           <div>
             <div className="flex items-center space-x-2">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
-                09 • SYSTEM ARCHITECTURE
+                08 • SYSTEM ARCHITECTURE
               </span>
               <span className="text-xs font-mono text-slate-500">FULL-STACK TOPOLOGY GRAPH</span>
             </div>

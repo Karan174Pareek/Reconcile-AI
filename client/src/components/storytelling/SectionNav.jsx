@@ -20,11 +20,10 @@ const SECTIONS = [
   { id: 'matching-engine', label: '04 Matching Engine', icon: GitMerge },
   { id: 'multi-pass', label: '05 Multi-Pass', icon: Clock },
   { id: 'data-transformation', label: '06 Data Transform', icon: Code2 },
-  { id: 'exceptions', label: '07 Exception Flow', icon: AlertTriangle },
-  { id: 'results', label: '08 Results & Ops', icon: Activity },
-  { id: 'architecture', label: '09 Architecture', icon: Cpu },
-  { id: 'verification', label: '10 Verification', icon: ShieldCheck },
-  { id: 'system-map', label: '11 System Map', icon: Map },
+  { id: 'results', label: '07 Results & Ops', icon: Activity },
+  { id: 'architecture', label: '08 Architecture', icon: Cpu },
+  { id: 'verification', label: '09 Verification', icon: ShieldCheck },
+  { id: 'system-map', label: '10 System Map', icon: Map },
 ];
 
 const HEADER_OFFSET = 120; // Sticky top navbar + sub-nav header offset

@@ -51,8 +51,8 @@ export default function TechnicalValidationSection() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-gray-200">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                10 • SYSTEM VERIFICATION
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                09 • SYSTEM VERIFICATION
               </span>
               <span className="text-xs font-mono text-gray-500">ENGINEERING VERIFICATION REPORT</span>
             </div>
