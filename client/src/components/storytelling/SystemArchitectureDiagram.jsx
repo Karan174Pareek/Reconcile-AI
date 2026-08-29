@@ -153,28 +153,28 @@ export default function SystemArchitectureDiagram() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.15 }}
-            className="p-5 rounded-xl bg-[#02042B] text-white border border-slate-800 space-y-4 shadow-md"
+            className="p-5 rounded-xl bg-slate-50 border border-slate-200/90 space-y-4 shadow-xs"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
               <div className="flex items-center space-x-3">
-                <div className="p-2.5 rounded-lg bg-[#0B72E7] text-white shadow-xs">
+                <div className="p-2.5 rounded-lg bg-[#0B72E7] text-white shadow-2xs">
                   <selectedNode.icon className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">{selectedNode.title}</h4>
-                  <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">{selectedNode.details}</p>
+                  <h4 className="text-sm font-bold text-slate-900">{selectedNode.title}</h4>
+                  <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{selectedNode.details}</p>
                 </div>
               </div>
 
-              <div className="text-xs font-mono text-cyan-300 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700 font-semibold self-start sm:self-auto shrink-0">
+              <div className="text-xs font-mono text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200/80 font-semibold self-start sm:self-auto shrink-0">
                 {selectedNode.telemetry}
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-              <span className="text-slate-400 uppercase font-semibold mr-1">Stack Modules:</span>
+              <span className="text-slate-500 uppercase font-semibold mr-1">Stack Modules:</span>
               {selectedNode.tags.map((t, i) => (
-                <span key={i} className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-100 font-medium">
+                <span key={i} className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-800 font-semibold shadow-2xs">
                   {t}
                 </span>
               ))}
