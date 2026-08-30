@@ -187,7 +187,19 @@ export default function AgentChat({ runId, run, isOpen, onClose, onNavigateToRef
             try {
               const event = JSON.parse(jsonStr);
 
-              if (event.type === 'text') {
+              if (event.type === 'engine_info') {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId
+                      ? {
+                          ...msg,
+                          engine: event.engine,
+                          engine_name: event.engine_name,
+                        }
+                      : msg
+                  )
+                );
+              } else if (event.type === 'text') {
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantMessageId
@@ -313,8 +325,10 @@ export default function AgentChat({ runId, run, isOpen, onClose, onNavigateToRef
                         </>
                       ) : (
                         <>
-                          <Bot className="h-3 w-3 text-blue-600" />
-                          <span>Claude AI Auditor</span>
+                          <Bot className={`h-3 w-3 ${msg.engine === 'gemini' ? 'text-purple-600' : msg.engine === 'heuristic' ? 'text-amber-600' : 'text-blue-600'}`} />
+                          <span className="font-semibold text-gray-700">
+                            {msg.engine_name || (msg.engine === 'gemini' ? 'Gemini Assistant' : msg.engine === 'heuristic' ? 'Forensic Inspector Engine' : 'Claude AI Auditor')}
+                          </span>
                         </>
                       )}
                     </div>

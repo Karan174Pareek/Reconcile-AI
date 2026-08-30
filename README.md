@@ -102,7 +102,8 @@ An "Ask AI" panel, accessible from every screen, lets you query the current run 
 - Suggested questions are generated from the *actual* current run (e.g. a real imbalanced batch ID if one exists), not hardcoded examples.
 - When the answer references a specific record, that reference is clickable and jumps you straight to it in the Exception Queue or Settlement Worksheet.
 - The conversation retains context across follow-up questions within a session.
-- If Claude's API is unavailable, the assistant says so honestly and falls back to a deterministic answer path — it never silently pretends to be running real AI reasoning when it isn't.
+- **3-Tier Multi-Provider AI Resilience Architecture**: The system executes a primary Claude 3.5 Sonnet pipeline (`ai_mode: "claude"`), automatically failing over to Google Gemini Flash (`ai_mode: "gemini"`) if Claude is unconfigured or encounters quota/credit limits, and finally falling back to a deterministic forensic engine (`ai_mode: "heuristic"`).
+- **Honest Provider Labeling**: The UI, audit logs, and exports explicitly record which engine produced each result (`"claude"`, `"gemini"`, or `"heuristic"`) — ensuring complete transparency and uptime for live production demos regardless of individual provider availability.
 
 ## Human-in-the-Loop, Always
 
@@ -117,7 +118,7 @@ Every match, exception, and approval is logged to an append-only audit trail —
 - **Frontend:** React, Vite, Tailwind CSS
 - **Backend:** Node.js, Express, MongoDB (Atlas), serverless-safe connection caching
 - **Real-time:** Socket.io locally, polling in production (Vercel's serverless model doesn't support long-lived WebSocket connections)
-- **AI reasoning:** Claude API — used specifically for the minority of cases simple rule-based matching can't confidently resolve, not as a blanket solution for the whole pipeline
+- **AI reasoning:** 3-Tier Multi-Provider Architecture (Claude 3.5 Sonnet primary ➔ Google Gemini 3.5 Flash Lite secondary ➔ Deterministic Forensic Engine final fallback) — used specifically for the minority of cases simple rule-based matching can't confidently resolve, with honest engine labeling across UI, logs, and database records.
 - **Deployment:** Vercel
 
 ## Getting Started

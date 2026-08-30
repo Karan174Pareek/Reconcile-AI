@@ -27,8 +27,8 @@ CRITICAL AUDIT INSTRUCTIONS:
 export const Pass3ItemSchema = z.object({
   payment_id: z.string().optional(),
   order_id: z.string().optional(),
-  bank_record_id: z.string().optional(),
-  settlement_id: z.string().optional(),
+  bank_record_id: z.string().nullable().optional(),
+  settlement_id: z.string().nullable().optional(),
   decision: z.enum(['match', 'exception']),
   match_ledger_id: z.string().nullable().optional(),
   category: z
@@ -44,6 +44,7 @@ export const Pass3ItemSchema = z.object({
       'timing_lag',
       'bank_fee',
     ])
+    .nullable()
     .optional(),
   confidence: z.number().min(0).max(1),
   rationale: z.string().min(5),

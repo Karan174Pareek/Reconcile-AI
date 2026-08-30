@@ -163,10 +163,37 @@ export const CLAUDE_AGENT_TOOLS = [
   },
 ];
 
+function convertSchemaForGemini(schema) {
+  if (!schema || typeof schema !== 'object') return schema;
+  if (Array.isArray(schema)) return schema.map(convertSchemaForGemini);
+
+  const copy = { ...schema };
+  if (Array.isArray(copy.enum)) {
+    copy.enum = copy.enum.map(String);
+  }
+  if (copy.properties) {
+    const newProps = {};
+    for (const [key, val] of Object.entries(copy.properties)) {
+      newProps[key] = convertSchemaForGemini(val);
+    }
+    copy.properties = newProps;
+  }
+  return copy;
+}
+
+/**
+ * Google Gemini tool calling definitions (mapped from CLAUDE_AGENT_TOOLS parameters)
+ */
+export const GEMINI_AGENT_TOOLS = CLAUDE_AGENT_TOOLS.map((t) => ({
+  name: t.name,
+  description: t.description,
+  parameters: convertSchemaForGemini(t.input_schema),
+}));
+
 /**
  * Dispatches a tool call from Claude Conversational Agent securely (read-only execution)
  */
-export async function executeAgentTool(runId, toolName, inputArgs = {}) {
+export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 'claude') {
   const limit = Math.min(Math.max(1, Number(inputArgs.limit) || 20), 50);
   let result = null;
 
@@ -240,14 +267,29 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
     }
 
     case 'query_matches': {
-      const query = { run_id: runId };
-      if (inputArgs.level !== undefined) query.level = inputArgs.level;
-      if (inputArgs.method) query.method = inputArgs.method;
-      if (inputArgs.min_confidence !== undefined) {
-        query.confidence = { $gte: Number(inputArgs.min_confidence) };
+      let matches = [];
+      if (mongoose.connection.readyState === 1) {
+        try {
+          const query = { run_id: runId };
+          if (inputArgs.level !== undefined) query.level = inputArgs.level;
+          if (inputArgs.method) query.method = inputArgs.method;
+          if (inputArgs.min_confidence !== undefined) {
+            query.confidence = { $gte: Number(inputArgs.min_confidence) };
+          }
+          matches = await Match.find(query).limit(limit).sort({ created_at: -1 }).lean();
+        } catch (e) {
+          console.warn('[Mongo query_matches Warning]:', e.message);
+        }
       }
 
-      const matches = await Match.find(query).limit(limit).sort({ created_at: -1 }).lean();
+      if (matches.length === 0) {
+        matches = MemoryStore.getMatches(runId);
+        if (inputArgs.level !== undefined) matches = matches.filter((m) => m.level === inputArgs.level);
+        if (inputArgs.method) matches = matches.filter((m) => m.method === inputArgs.method);
+        if (inputArgs.min_confidence !== undefined) matches = matches.filter((m) => m.confidence >= Number(inputArgs.min_confidence));
+        matches = matches.slice(0, limit);
+      }
+
       result = {
         count: matches.length,
         matches: matches.map((m) => ({
@@ -385,7 +427,7 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}) {
   try {
     await AuditLog.create({
       run_id: runId,
-      actor: 'claude',
+      actor: actor || 'agent',
       action: `agent_tool_call:${toolName}`,
       target_type: 'agent_query',
       target_id: inputArgs.id || inputArgs.settlement_id || null,

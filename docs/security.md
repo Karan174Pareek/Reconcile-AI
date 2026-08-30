@@ -25,7 +25,7 @@ ReconcileAI is built with a zero-trust financial architecture designed to preven
 
 ## 5. Serverless & Cloud Infrastructure Security
 - **MongoDB Atlas Network Security**: Configured with IP access control lists and TLS 1.3 encryption in transit. The serverless application uses `global.mongoose` connection caching with `maxPoolSize: 10` to avoid connection exhaustion across concurrent Lambda containers.
-- **Environment Variable Isolation**: Zero secrets, API keys, or database credentials are committed to git or exposed to the client bundle. All credentials (`MONGO_URI`, `ANTHROPIC_API_KEY`, `JWT_SECRET`) are configured strictly in Vercel Project Settings.
+- **Environment Variable Isolation**: Zero secrets, API keys, or database credentials are committed to git or exposed to the client bundle. All credentials (`MONGO_URI`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `JWT_SECRET`) are configured strictly in Vercel Project Settings / `.env`.
 - **Stateless Cross-Container Auto-Hydration**: In serverless cold-start events, `MemoryStore.ensureRunHydrated()` deterministically reconstructs run state in memory ($<2\text{ms}$) without persisting unencrypted temporary files to disk, adhering to read-only serverless filesystem constraints.
 
 ---

@@ -44,7 +44,7 @@ The navbar must be responsive: full row on desktop, collapsing into a hamburger/
 
 Variance/exception categories (do not collapse back to a generic flat "exception" type): `batch_imbalance`, `mdr_fee`, `gst_on_mdr`, `refund_deduction`, `rounding`, `partial_settlement`, `unrecorded`, `unknown`.
 
-`ai_mode` field on each run indicates whether Level 2 unresolved reasoning ran on real Claude AI (`"claude"`/similar) or the deterministic/heuristic fallback (`"heuristic"`/`"fallback"`) — this must always be labeled honestly, never mislabeled as AI when it was actually the fallback path.
+`ai_mode` field on each run indicates whether Level 2 unresolved reasoning ran on primary Claude AI (`"claude"`), secondary Google Gemini Flash (`"gemini"`), or the deterministic heuristic engine (`"heuristic"`). This must always be labeled honestly across the UI, audit logs, and exports — ensuring complete multi-provider resilience and zero misrepresentation regardless of single-provider availability.
 
 ---
 

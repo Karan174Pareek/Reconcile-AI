@@ -170,6 +170,9 @@ test('executePass3BatchCall: falls back to unknown exception on persistent error
 });
 
 test('generateDraftActionContent: creates valid structured draft action for unrecorded exception', async () => {
+  const origGemini = process.env.GEMINI_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+
   const exceptionDoc = {
     category: 'unrecorded',
     confidence: 0.9,
@@ -186,6 +189,8 @@ test('generateDraftActionContent: creates valid structured draft action for unre
 
   const draft = await generateDraftActionContent(null, exceptionDoc, bankRecord);
 
+  if (origGemini) process.env.GEMINI_API_KEY = origGemini;
+
   assert.equal(draft.action_type, 'vendor_email');
   assert.ok(draft.confidence >= 0.8);
   assert.ok(draft.draft_content.subject.includes('UTR-98765') || draft.draft_content.subject.includes('BNK-UNREC-1'));
@@ -193,6 +198,9 @@ test('generateDraftActionContent: creates valid structured draft action for unre
 });
 
 test('generateDraftActionContent: creates ledger_correction for refund exception', async () => {
+  const origGemini = process.env.GEMINI_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+
   const exceptionDoc = {
     category: 'refund',
     confidence: 0.92,
@@ -208,6 +216,8 @@ test('generateDraftActionContent: creates ledger_correction for refund exception
   };
 
   const draft = await generateDraftActionContent(null, exceptionDoc, bankRecord);
+
+  if (origGemini) process.env.GEMINI_API_KEY = origGemini;
 
   assert.equal(draft.action_type, 'ledger_correction');
   assert.equal(draft.draft_content.entry_type, 'credit_note');

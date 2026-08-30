@@ -35,6 +35,18 @@ export function getSanitizedAnthropicKey() {
 }
 
 /**
+ * Sanitizes and validates Google Gemini API key from environment variables
+ */
+export function getSanitizedGeminiKey() {
+  const rawKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+  const cleanedKey = rawKey.replace(/^["']|["']$/g, '').trim();
+  if (!cleanedKey || cleanedKey === 'mock-key' || cleanedKey.includes('placeholder') || cleanedKey.includes('your_gemini')) {
+    return null;
+  }
+  return cleanedKey;
+}
+
+/**
  * Initializes Anthropic SDK client
  */
 function getAnthropicClient(customClient = null) {
@@ -137,6 +149,11 @@ export async function executePass3BatchCall(client, batchItems, options = {}) {
       err.message?.includes('400') ||
       err.message?.includes('401')
     ) {
+      const geminiKey = getSanitizedGeminiKey();
+      if (geminiKey) {
+        console.warn('[Pass 3] Anthropic quota/credit balance limit reached. Seamlessly failing over to Gemini Flash tier.');
+        return executePass3GeminiBatchCall(geminiKey, batchItems, options);
+      }
       console.warn('[Pass 3] Anthropic quota/credit balance limit reached. Utilizing deterministic forensic analyzer.');
       return generateFallbackPass3Evaluations(batchItems);
     }
@@ -161,9 +178,61 @@ export async function executePass3BatchCall(client, batchItems, options = {}) {
     return validated.evaluations;
   } catch (retryErr) {
     console.error('[Pass 3] Attempt 2 failed:', retryErr.message);
+    const geminiKey = getSanitizedGeminiKey();
+    if (geminiKey) {
+      console.warn('[Pass 3] Claude failed, falling over to Gemini Flash fallback tier...');
+      return executePass3GeminiBatchCall(geminiKey, batchItems, options);
+    }
     return generateFallbackPass3Evaluations(batchItems);
   }
 }
+
+/**
+ * Calls Google Gemini REST API with schema validation for Pass 3 batch reasoning.
+ */
+export async function executePass3GeminiBatchCall(geminiKey, batchItems, options = {}) {
+  const model = options.model || process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const userPrompt = buildPass3UserPrompt(batchItems);
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: PASS3_SYSTEM_PROMPT }],
+        },
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: userPrompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: 'application/json',
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini API HTTP ${response.status}: ${errText}`);
+    }
+
+    const data = await response.json();
+    const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const cleanedJson = cleanJsonResponse(rawContent);
+    const parsed = JSON.parse(cleanedJson);
+    const validated = Pass3BatchResponseSchema.parse(parsed);
+    return validated.evaluations;
+  } catch (err) {
+    console.warn('[Pass 3 Gemini Batch Call Error]:', err.message);
+    return generateFallbackPass3Evaluations(batchItems);
+  }
+}
+
 
 /**
  * Executes an array of items with a fixed concurrency limit
@@ -252,8 +321,50 @@ export function generateFallbackPass3Evaluations(batchItems) {
 }
 
 /**
- * Generates a draft remediation action for an exception (using Claude API or structured fallback).
+ * Generates a draft action using Google Gemini API
  */
+export async function generateDraftActionGemini(geminiKey, exceptionRecord, targetRecord) {
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const prompt = buildDraftActionUserPrompt(exceptionRecord, targetRecord);
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: DRAFT_ACTION_SYSTEM_PROMPT }],
+        },
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.3,
+          responseMimeType: 'application/json',
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini API HTTP ${response.status}: ${errText}`);
+    }
+
+    const data = await response.json();
+    const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const cleaned = cleanJsonResponse(rawContent);
+    const parsed = JSON.parse(cleaned);
+    return DraftActionResponseSchema.parse(parsed);
+  } catch (err) {
+    console.warn('[DraftAction Gemini Error]:', err.message);
+    return generateDraftActionContent(null, exceptionRecord, targetRecord);
+  }
+}
+
 /**
  * Generates a draft remediation action for an exception (using Claude API or structured fallback).
  */
@@ -269,6 +380,11 @@ export async function generateDraftActionContent(client, exceptionRecord, target
   const finalAmount = amountFromRec > 0 ? Math.round(amountFromRec * 100) / 100 : 1250.00;
 
   if (!client) {
+    const geminiKey = getSanitizedGeminiKey();
+    if (geminiKey) {
+      return generateDraftActionGemini(geminiKey, exceptionRecord, targetRecord);
+    }
+
     const isRefund = exceptionRecord?.category === 'refund_deduction' || (targetRecord && targetRecord.amount < 0);
     if (isRefund) {
       return {
@@ -361,19 +477,24 @@ export async function executePass3(runId, options = {}) {
   }
 
   const client = getAnthropicClient(options.client);
-  const aiMode = client ? 'live' : 'fallback';
+  const geminiKey = getSanitizedGeminiKey();
 
-  if (!client) {
-    console.warn(
-      '\n[Pass 3] ⚠  No ANTHROPIC_API_KEY (or CLAUDE_API_KEY) configured.\n' +
-        '        Pass 3 is running in DETERMINISTIC HEURISTIC FALLBACK mode — the\n' +
-        '        rationales and draft actions below are rule-based estimates, NOT live\n' +
-        '        Claude reasoning. Set ANTHROPIC_API_KEY in server/.env to enable live AI.\n'
-    );
+  let aiMode = 'heuristic';
+  let matchMethod = 'heuristic';
+
+  if (client) {
+    aiMode = 'claude';
+    matchMethod = 'ai';
+    console.log(`[Pass 3] Primary Claude 3.5 Sonnet reasoning engaged.`);
+  } else if (geminiKey) {
+    aiMode = 'gemini';
+    matchMethod = 'ai';
+    console.log(`[Pass 3] Secondary Gemini Flash reasoning engaged.`);
   } else {
-    console.log(`[Pass 3] Live Claude reasoning enabled (model: ${process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022'}).`);
+    aiMode = 'heuristic';
+    matchMethod = 'heuristic';
+    console.warn('[Pass 3] Neither Claude nor Gemini configured. Running in DETERMINISTIC HEURISTIC FALLBACK mode.');
   }
-  const matchMethod = client ? 'ai' : 'heuristic';
 
   // Check if run has settlement line items
   let lineItemCount = 0;
@@ -450,12 +571,29 @@ export async function executePass3(runId, options = {}) {
 
     const batchEvaluations = await mapConcurrent(batches, 2, async (batch) => {
       if (anthropicDisabledDueToQuota || !client) {
+        if (geminiKey) {
+          aiMode = 'gemini';
+          matchMethod = 'ai';
+          return await executePass3GeminiBatchCall(geminiKey, batch, options);
+        }
+        aiMode = 'heuristic';
+        matchMethod = 'heuristic';
         return generateFallbackPass3Evaluations(batch);
       }
       try {
-        return await executePass3BatchCall(client, batch, options);
+        const evals = await executePass3BatchCall(client, batch, options);
+        aiMode = 'claude';
+        matchMethod = 'ai';
+        return evals;
       } catch (e) {
         anthropicDisabledDueToQuota = true;
+        if (geminiKey) {
+          aiMode = 'gemini';
+          matchMethod = 'ai';
+          return await executePass3GeminiBatchCall(geminiKey, batch, options);
+        }
+        aiMode = 'heuristic';
+        matchMethod = 'heuristic';
         return generateFallbackPass3Evaluations(batch);
       }
     });
@@ -508,7 +646,7 @@ export async function executePass3(runId, options = {}) {
               try {
                 await AuditLog.create({
                   run_id: runId,
-                  actor: 'claude_settlement_reasoner',
+                  actor: aiMode === 'claude' ? 'claude_settlement_reasoner' : aiMode === 'gemini' ? 'gemini_settlement_reasoner' : 'heuristic_engine',
                   action: 'settlement_line_item_matched',
                   target_type: 'match',
                   target_id: li?.payment_id,

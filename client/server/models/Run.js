@@ -38,12 +38,11 @@ const RunSchema = new mongoose.Schema(
       type: Number,
       default: 0.0,
     },
-    // Records whether Pass 3 reasoning used the live Claude API or the
-    // deterministic heuristic fallback (no ANTHROPIC_API_KEY configured).
-    // Surfaced to the UI so heuristic estimates are never mistaken for live AI.
+    // Records whether Pass 3 reasoning ran on Claude, Gemini, or heuristic fallback.
+    // Surfaced to the UI so fallback estimates are never mistaken for live AI.
     ai_mode: {
       type: String,
-      enum: ['pending', 'live', 'fallback'],
+      enum: ['pending', 'claude', 'gemini', 'heuristic', 'live', 'fallback'],
       default: 'pending',
     },
     // Razorpay 3-level settlement-unpacking metrics (batch-level universe,

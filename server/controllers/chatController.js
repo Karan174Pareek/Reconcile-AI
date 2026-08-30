@@ -1,9 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import mongoose from 'mongoose';
-import { CLAUDE_AGENT_TOOLS, executeAgentTool } from '../services/agentToolRouter.js';
+import { CLAUDE_AGENT_TOOLS, GEMINI_AGENT_TOOLS, executeAgentTool } from '../services/agentToolRouter.js';
 import Run from '../models/Run.js';
 import { MemoryStore } from '../services/memoryStore.js';
-import { getSanitizedAnthropicKey } from '../services/claudeOrchestrator.js';
+import { getSanitizedAnthropicKey, getSanitizedGeminiKey } from '../services/claudeOrchestrator.js';
 
 const AGENT_SYSTEM_PROMPT = `You are ReconcileAI's Tier-3 Senior Forensic Financial Assistant.
 You have real-time read-only access to the active reconciliation database for this run via tool functions.
@@ -67,120 +67,119 @@ export async function streamAgentChat(req, res, next) {
       return res.end();
     }
 
-    const apiKey = getSanitizedAnthropicKey();
-    const isLiveApiKey = !!apiKey;
+    const anthropicKey = getSanitizedAnthropicKey();
+    const geminiKey = getSanitizedGeminiKey();
 
-    if (!isLiveApiKey) {
-      // Deterministic tool-using offline assistant for testing/development
-      await handleOfflineAgentConversation(run_id, run, messages, sendEvent);
-      sendEvent({ type: 'done' });
-      return res.end();
-    }
+    // Tier 1: Try Claude if key is configured
+    if (anthropicKey) {
+      try {
+        const client = new Anthropic({ apiKey: anthropicKey });
+        let conversation = messages.map((m) => {
+          let content = m.content;
+          if (typeof content === 'string') {
+            return { role: m.role === 'assistant' ? 'assistant' : 'user', content };
+          }
+          if (Array.isArray(content)) {
+            const textParts = content
+              .filter((block) => block.type === 'text')
+              .map((block) => block.text);
+            return {
+              role: m.role === 'assistant' ? 'assistant' : 'user',
+              content: textParts.length > 0 ? textParts.join('\n') : JSON.stringify(content),
+            };
+          }
+          return { role: m.role === 'assistant' ? 'assistant' : 'user', content: JSON.stringify(content) };
+        });
 
-    const client = new Anthropic({ apiKey });
-    let conversation = messages.map((m) => {
-      let content = m.content;
-      if (typeof content === 'string') {
-        return { role: m.role === 'assistant' ? 'assistant' : 'user', content };
-      }
-      if (Array.isArray(content)) {
-        const textParts = content
-          .filter((block) => block.type === 'text')
-          .map((block) => block.text);
-        return {
-          role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: textParts.length > 0 ? textParts.join('\n') : JSON.stringify(content),
-        };
-      }
-      if (content && typeof content === 'object' && content.type === 'image') {
-        return {
-          role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: '[Image content is not supported. Please describe the image in text.]',
-        };
-      }
-      return { role: m.role === 'assistant' ? 'assistant' : 'user', content: JSON.stringify(content) };
-    });
+        let turns = 0;
+        let engineInfoSent = false;
+        while (turns < 5) {
+          turns++;
 
-    // Multi-turn tool execution loop (max 5 turns)
-    let turns = 0;
-    while (turns < 5) {
-      turns++;
+          const response = await client.messages.create({
+            model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+            max_tokens: 1500,
+            temperature: 0.2,
+            system: `${AGENT_SYSTEM_PROMPT}\nActive Run ID: "${run_id}" (Status: ${run.status}, Total records: ${run.total_records}, Match rate: ${run.match_rate}%).`,
+            tools: CLAUDE_AGENT_TOOLS,
+            messages: conversation,
+          });
 
-      const response = await client.messages.create({
-        model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
-        max_tokens: 1500,
-        temperature: 0.2,
-        system: `${AGENT_SYSTEM_PROMPT}\nActive Run ID: "${run_id}" (Status: ${run.status}, Total records: ${run.total_records}, Match rate: ${run.match_rate}%).`,
-        tools: CLAUDE_AGENT_TOOLS,
-        messages: conversation,
-      });
+          if (!engineInfoSent) {
+            sendEvent({
+              type: 'engine_info',
+              engine: 'claude',
+              engine_name: 'Claude AI Auditor',
+            });
+            engineInfoSent = true;
+          }
 
-      const toolCalls = (response.content || []).filter((b) => b.type === 'tool_use');
-      const textBlocks = (response.content || []).filter((b) => b.type === 'text');
+          const toolCalls = (response.content || []).filter((b) => b.type === 'tool_use');
+          const textBlocks = (response.content || []).filter((b) => b.type === 'text');
 
-      // Stream text chunks if any
-      for (const block of textBlocks) {
-        if (block.text) {
-          sendEvent({ type: 'text', content: block.text });
+          for (const block of textBlocks) {
+            if (block.text) {
+              sendEvent({ type: 'text', content: block.text });
+            }
+          }
+
+          if (toolCalls.length === 0 || response.stop_reason === 'end_turn') {
+            break;
+          }
+
+          conversation.push({ role: 'assistant', content: response.content });
+
+          const toolResultBlocks = [];
+          for (const toolCall of toolCalls) {
+            sendEvent({
+              type: 'tool_start',
+              tool_name: toolCall.name,
+              input: toolCall.input,
+              tool_use_id: toolCall.id,
+            });
+
+            const toolResult = await executeAgentTool(run_id, toolCall.name, toolCall.input, 'claude');
+
+            sendEvent({
+              type: 'tool_result',
+              tool_name: toolCall.name,
+              result: toolResult,
+              tool_use_id: toolCall.id,
+            });
+
+            toolResultBlocks.push({
+              type: 'tool_result',
+              tool_use_id: toolCall.id,
+              content: JSON.stringify(toolResult),
+            });
+          }
+
+          conversation.push({ role: 'user', content: toolResultBlocks });
         }
+
+        sendEvent({ type: 'done' });
+        return res.end();
+      } catch (anthropicErr) {
+        console.warn('[Chat SSE Anthropic Error - Failing over to Gemini / Heuristic]:', anthropicErr.message);
       }
-
-      if (toolCalls.length === 0 || response.stop_reason === 'end_turn') {
-        break;
-      }
-
-      // Execute tool calls and stream results
-      conversation.push({ role: 'assistant', content: response.content });
-
-      const toolResultBlocks = [];
-      for (const toolCall of toolCalls) {
-        sendEvent({
-          type: 'tool_start',
-          tool_name: toolCall.name,
-          input: toolCall.input,
-          tool_use_id: toolCall.id,
-        });
-
-        const toolResult = await executeAgentTool(run_id, toolCall.name, toolCall.input);
-
-        sendEvent({
-          type: 'tool_result',
-          tool_name: toolCall.name,
-          result: toolResult,
-          tool_use_id: toolCall.id,
-        });
-
-        toolResultBlocks.push({
-          type: 'tool_result',
-          tool_use_id: toolCall.id,
-          content: JSON.stringify(toolResult),
-        });
-      }
-
-      conversation.push({ role: 'user', content: toolResultBlocks });
     }
 
+    // Tier 2: Try Gemini if key is configured (or after Claude credit failure)
+    if (geminiKey) {
+      try {
+        await handleGeminiAgentConversation(run_id, run, messages, geminiKey, sendEvent);
+        sendEvent({ type: 'done' });
+        return res.end();
+      } catch (geminiErr) {
+        console.warn('[Chat SSE Gemini Error - Failing over to Heuristic]:', geminiErr.message);
+      }
+    }
+
+    // Tier 3: Deterministic Heuristic Engine Fallback
+    await handleOfflineAgentConversation(run_id, run, messages, sendEvent);
     sendEvent({ type: 'done' });
-    res.end();
+    return res.end();
   } catch (err) {
-    console.warn('[Chat SSE Anthropic Error - Switching to Heuristic]:', err.message);
-    const isCreditOrAuth =
-      err.message?.includes('credit balance') ||
-      err.message?.includes('invalid_request_error') ||
-      err.message?.includes('400') ||
-      err.message?.includes('401') ||
-      err.message?.includes('429');
-
-    if (isCreditOrAuth) {
-      sendEvent({
-        type: 'text',
-        content: `*(Anthropic API notice: Credit limit reached. Querying active database via Forensic Inspector Engine.)*\n\n`,
-      });
-      await handleOfflineAgentConversation(run_id, run, messages, sendEvent);
-      sendEvent({ type: 'done' });
-      return res.end();
-    }
-
     sendEvent({ type: 'error', message: err.message || 'Error processing chat message' });
     sendEvent({ type: 'done' });
     res.end();
@@ -188,9 +187,120 @@ export async function streamAgentChat(req, res, next) {
 }
 
 /**
+ * Handles Gemini agent conversation with tool calling and SSE streaming
+ */
+async function handleGeminiAgentConversation(runId, run, messages, geminiKey, sendEvent) {
+  sendEvent({
+    type: 'engine_info',
+    engine: 'gemini',
+    engine_name: 'Gemini Assistant',
+  });
+
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+
+  let contents = messages.map((m) => {
+    const role = m.role === 'assistant' || m.role === 'model' ? 'model' : 'user';
+    const textContent = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+    return {
+      role,
+      parts: [{ text: textContent }],
+    };
+  });
+
+  let turns = 0;
+  while (turns < 5) {
+    turns++;
+
+    const payload = {
+      system_instruction: {
+        parts: [{ text: `${AGENT_SYSTEM_PROMPT}\nActive Run ID: "${runId}" (Status: ${run.status}, Total records: ${run.total_records}, Match rate: ${run.match_rate}%).` }],
+      },
+      contents,
+      tools: [
+        {
+          functionDeclarations: GEMINI_AGENT_TOOLS,
+        },
+      ],
+      generationConfig: {
+        temperature: 0.2,
+      },
+    };
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini Chat API HTTP ${response.status}: ${errText}`);
+    }
+
+    const data = await response.json();
+    const candidate = data.candidates?.[0];
+    const parts = candidate?.content?.parts || [];
+
+    let hasFunctionCall = false;
+
+    for (const part of parts) {
+      if (part.text) {
+        sendEvent({ type: 'text', content: part.text });
+      }
+      if (part.functionCall) {
+        hasFunctionCall = true;
+        const call = part.functionCall;
+        const callId = `gemini_call_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+
+        sendEvent({
+          type: 'tool_start',
+          tool_name: call.name,
+          input: call.args || {},
+          tool_use_id: callId,
+        });
+
+        const result = await executeAgentTool(runId, call.name, call.args || {}, 'gemini');
+
+        sendEvent({
+          type: 'tool_result',
+          tool_name: call.name,
+          result,
+          tool_use_id: callId,
+        });
+
+        contents.push(candidate.content);
+
+        contents.push({
+          role: 'user',
+          parts: [
+            {
+              functionResponse: {
+                name: call.name,
+                response: { name: call.name, content: result },
+              },
+            },
+          ],
+        });
+      }
+    }
+
+    if (!hasFunctionCall) {
+      break;
+    }
+  }
+}
+
+/**
  * Handles offline agent queries using real MongoDB queries via agentToolRouter and generates formatted answers
  */
 async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
+  sendEvent({
+    type: 'engine_info',
+    engine: 'heuristic',
+    engine_name: 'Forensic Inspector Engine',
+  });
+
   const lastMessage = messages[messages.length - 1]?.content || '';
   const queryLower = lastMessage.toLowerCase();
 

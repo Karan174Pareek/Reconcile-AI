@@ -13,10 +13,15 @@
 
 ---
 
-## 3. Claude AI Orchestration, Quotas & Rate Limits
-- **Parallel Concurrency Limiting (`mapConcurrent`)**: Pass 3 processes batches with a concurrency window of 2 simultaneous requests, avoiding burst-induced HTTP 429 rate limit spikes on external AI APIs.
-- **Exponential Backoff**: If a 429 Rate Limit error occurs, the orchestrator backs off for 1500ms before retrying.
-- **Quota & Credit Balance Graceful Fallback**: If an Anthropic API call encounters a 400/402 credit balance or quota error, the system fast-memoizes the limit and seamlessly routes reasoning to the deterministic forensic analysis engine. The auditor is transparently notified without pipeline termination.
+## 3. Multi-Provider AI Resilience (Claude ➔ Gemini ➔ Heuristic)
+- **Primary Tier (Claude 3.5 Sonnet)**: `executePass3` and agent chat evaluate `ANTHROPIC_API_KEY` first. If configured and healthy, execution uses Claude.
+- **Secondary Tier (Google Gemini 3.5 Flash Lite)**: If Anthropic returns an HTTP 400 credit balance error, HTTP 429 quota error, or network timeout, the orchestrator immediately catches the exception and fails over to Google Gemini (`gemini-3.5-flash-lite`).
+  - **Free Tier Rate Limit Handling (15 RPM)**: Google Gemini AI Studio free tier enforces a strict limit of 15 requests per minute (15 RPM). When batch reasoning or multi-turn chat exceeds 15 RPM, Gemini returns HTTP 429 `RESOURCE_EXHAUSTED`. The orchestrator handles 429 errors by gracefully falling back to Tier 3 without breaking the pipeline.
+  - **Schema Enum & Nullable Compliance**: Gemini REST API function declarations enforce string-only enum values (`convertSchemaForGemini()`) and nullable field structures (`Pass3ItemSchema`).
+  - **Thought Signature Preservation**: Gemini 3.5 Flash Lite requires model `thoughtSignature` metadata to be preserved across multi-turn tool calling turns (`contents.push(candidate.content)`).
+- **Tertiary Tier (Deterministic Heuristic Engine)**: If both Claude and Gemini are unconfigured, out of credits, or rate-limited, execution safely degrades to the offline Forensic Inspector Engine (`ai_mode: "heuristic"`), ensuring 100% operational uptime.
+- **Parallel Concurrency Limiting (`mapConcurrent`)**: Pass 3 processes batches with a concurrency window of 2 simultaneous requests, avoiding burst-induced rate limit spikes.
+- **Exponential Backoff**: If a 429 Rate Limit error occurs, the orchestrator backs off before retrying.
 - **Single Corrective Retry**: If an AI call returns malformed JSON, the orchestrator triggers a corrective repair prompt enforcing exact JSON schemas.
 
 ---
