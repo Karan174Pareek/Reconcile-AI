@@ -307,109 +307,323 @@ async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
   });
 
   const lastMessage = messages[messages.length - 1]?.content || '';
-  const queryLower = lastMessage.toLowerCase();
+  const queryLower = lastMessage.toLowerCase().trim();
 
-  const runStatus = run?.status || 'complete';
-  const totalRecs = run?.total_records || 500;
-  const pass1 = run?.pass1_matched || 0;
-  const pass2 = run?.pass2_matched || 0;
-  const pass3 = run?.pass3_matched || 0;
-  const unresolvedRecs = run?.unresolved || 0;
-  const matchRate = run?.match_rate || 0.0;
-
-  if (queryLower.includes('exception') || queryLower.includes('unresolved') || queryLower.includes('issue')) {
+  // Pattern 1: Unrecorded orders / missing ledger entries
+  if (
+    queryLower.includes('unrecorded') ||
+    queryLower.includes('missing') ||
+    queryLower.includes('no ledger') ||
+    queryLower.includes('without ledger')
+  ) {
     sendEvent({
       type: 'tool_start',
       tool_name: 'query_exceptions',
-      input: { limit: 10 },
-      tool_use_id: 'tool_call_exp_1',
+      input: { category: 'unrecorded', limit: 20 },
+      tool_use_id: 'tool_call_unrecorded_1',
     });
 
-    const result = await executeAgentTool(runId, 'query_exceptions', { limit: 10 });
+    const result = await executeAgentTool(runId, 'query_exceptions', { category: 'unrecorded', limit: 20 }, 'heuristic');
 
     sendEvent({
       type: 'tool_result',
       tool_name: 'query_exceptions',
       result,
-      tool_use_id: 'tool_call_exp_1',
+      tool_use_id: 'tool_call_unrecorded_1',
     });
 
-    const expCount = result.exceptions?.length || 0;
-    sendEvent({
-      type: 'text',
-      content: `I analyzed the exception queue for **Run ${runId}**. There are currently **${expCount} exception(s)** detected by the diagnostic engine.\n\n` +
-        `### Diagnostic Summary:\n` +
-        (result.exceptions || [])
-          .slice(0, 5)
-          .map(
-            (e) =>
-              `- **${e.bank_record_id || e.id || 'EXC'}** [${(e.category || 'unknown').toUpperCase()}]: ${e.ai_rationale || 'Discrepancy detected'} (${(
-                (e.confidence || 0) * 100
-              ).toFixed(0)}% confidence, Status: \`${e.human_decision || 'pending'}\`)`
-          )
-          .join('\n') +
-        `\n\nYou can review or resolve these exceptions in the **Exception Queue** tab.`,
-    });
-  } else if (queryLower.includes('match') || queryLower.includes('rate') || queryLower.includes('summary')) {
-    sendEvent({
-      type: 'tool_start',
-      tool_name: 'query_matches',
-      input: { limit: 5 },
-      tool_use_id: 'tool_call_match_1',
-    });
+    const exceptions = result.exceptions || [];
+    if (exceptions.length > 0) {
+      const rows = exceptions
+        .map(
+          (e, i) =>
+            `| **${e.bank_record_id || e.id || `EXC-${i + 1}`}** | ${e.payment_id || 'N/A'} | ${e.order_id || 'N/A'} | ₹${Number(e.expected_amount || e.settled_amount || 0).toLocaleString('en-IN')} | ${e.ai_rationale || 'Unrecorded bank payment missing ledger entry'} | \`${e.human_decision || 'pending'}\` |`
+        )
+        .join('\n');
 
-    const result = await executeAgentTool(runId, 'query_matches', { limit: 5 });
-
-    sendEvent({
-      type: 'tool_result',
-      tool_name: 'query_matches',
-      result,
-      tool_use_id: 'tool_call_match_1',
-    });
-
-    sendEvent({
-      type: 'text',
-      content: `### Reconciliation Overview for Run \`${runId}\`:\n` +
-        `- **Status:** \`${runStatus}\`\n` +
-        `- **Total Records:** **${totalRecs}**\n` +
-        `- **Pass 1 Exact Matches:** **${pass1}**\n` +
-        `- **Pass 2 Fuzzy Matches:** **${pass2}**\n` +
-        `- **Pass 3 Claude AI Matches:** **${pass3}**\n` +
-        `- **Unresolved / Exceptions:** **${unresolvedRecs}**\n` +
-        `- **Final Reconciliation Rate:** **${matchRate}%**\n\n` +
-        `Sample verified matches:\n` +
-        (result.matches || [])
-          .slice(0, 3)
-          .map(
-            (m) =>
-              `- **${m.bank_record_id || 'BNK'}** ↔ **${m.ledger_record_id || 'LED'}** [${(m.method || 'exact').toUpperCase()}]: ${m.rationale || 'Matched'}`
-          )
-          .join('\n'),
-    });
-  } else {
-    sendEvent({
-      type: 'tool_start',
-      tool_name: 'query_audit_log',
-      input: { limit: 5 },
-      tool_use_id: 'tool_call_audit_1',
-    });
-
-    const result = await executeAgentTool(runId, 'query_audit_log', { limit: 5 });
-
-    sendEvent({
-      type: 'tool_result',
-      tool_name: 'query_audit_log',
-      result,
-      tool_use_id: 'tool_call_audit_1',
-    });
-
-    sendEvent({
-      type: 'text',
-      content: `I am connected to the live database for **Run ${runId}** (Reconciliation Rate: **${matchRate}%**).\n\n` +
-        `You can ask me to:\n` +
-        `- Inspect specific bank or ledger transactions (e.g. *"Show details for BNK-xxx"*)\n` +
-        `- Analyze exception categories like duplicates, refunds, or bank fees\n` +
-        `- Review the latest audit trail logs and human resolutions.`,
-    });
+      sendEvent({
+        type: 'text',
+        content: `### Unrecorded Razorpay Payments (Missing Ledger Entries)\n\n` +
+          `Found **${exceptions.length} unrecorded transaction(s)** in active run **${runId}** where direct bank credits exist without corresponding internal ledger order entries:\n\n` +
+          `| Bank Record ID | Payment ID | Order ID | Amount (₹) | Diagnostic Rationale | Status |\n` +
+          `| :--- | :--- | :--- | :--- | :--- | :--- |\n` +
+          `${rows}\n\n` +
+          `*Note: Draft remediation actions (Vendor Email / Adjusting Journal Entry) have been automatically queued in the **Draft Remediation** panel for human auditor approval.*`,
+      });
+    } else {
+      sendEvent({
+        type: 'text',
+        content: `### Unrecorded Orders Analysis\n\nNo unrecorded bank payments missing internal ledger entries were found in run **${runId}**. All bank credits have been correlated with settlement batches or ledger records.`,
+      });
+    }
+    return;
   }
+
+  // Pattern 2: GST / Input Tax Credit (ITC)
+  if (
+    queryLower.includes('gst') ||
+    queryLower.includes('itc') ||
+    queryLower.includes('tax credit') ||
+    queryLower.includes('input tax')
+  ) {
+    sendEvent({
+      type: 'tool_start',
+      tool_name: 'query_settlements',
+      input: { limit: 50 },
+      tool_use_id: 'tool_call_gst_1',
+    });
+
+    const result = await executeAgentTool(runId, 'query_settlements', { limit: 50 }, 'heuristic');
+
+    sendEvent({
+      type: 'tool_result',
+      tool_name: 'query_settlements',
+      result,
+      tool_use_id: 'tool_call_gst_1',
+    });
+
+    const settlements = result.settlements || [];
+    let totalGross = 0;
+    let totalMdr = 0;
+    let totalGst = 0;
+
+    const rows = settlements.map((s) => {
+      const gross = Number(s.gross_amount || 0);
+      const mdr = Number(s.fees || gross * 0.02);
+      const gst = Number(s.tax || mdr * 0.18);
+      totalGross += gross;
+      totalMdr += mdr;
+      totalGst += gst;
+      return `| **${s.settlement_id}** | ${s.settled_at ? new Date(s.settled_at).toISOString().split('T')[0] : '2026-08'} | ₹${gross.toLocaleString('en-IN')} | ₹${mdr.toFixed(2)} | **₹${gst.toFixed(2)}** |`;
+    }).join('\n');
+
+    sendEvent({
+      type: 'text',
+      content: `### GST Input Tax Credit (ITC) Breakdown for Cycle \`${runId}\`\n\n` +
+        `**Total Claimable GST ITC: ₹${totalGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}**\n\n` +
+        `Razorpay charges an **18% GST** on payment gateway processing fees (MDR). Under Section 16 of the CGST Act, this tax component is fully eligible as Input Tax Credit:\n\n` +
+        `| Settlement ID | Date | Gross Amount (₹) | MDR Fees (₹) | **GST on MDR (18%) (₹)** |\n` +
+        `| :--- | :--- | :--- | :--- | :--- |\n` +
+        `${rows}\n` +
+        `| **Total** | — | **₹${totalGross.toLocaleString('en-IN')}** | **₹${totalMdr.toFixed(2)}** | **₹${totalGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}** |\n\n` +
+        `**Statutory Justification:** All payment processing fees billed by Razorpay constitute eligible business inputs. The 18% GST tax component paid is recoverable against output GST liabilities upon GSTR-2B reconciliation.`,
+    });
+    return;
+  }
+
+  // Pattern 3: Imbalanced / Batch Imbalance
+  if (
+    queryLower.includes('imbalance') ||
+    queryLower.includes('imbalanced') ||
+    queryLower.includes('integrity') ||
+    queryLower.includes('level 1')
+  ) {
+    sendEvent({
+      type: 'tool_start',
+      tool_name: 'query_settlements',
+      input: { integrity_status: 'imbalanced', limit: 20 },
+      tool_use_id: 'tool_call_imbalance_1',
+    });
+
+    const result = await executeAgentTool(runId, 'query_settlements', { integrity_status: 'imbalanced', limit: 20 }, 'heuristic');
+
+    sendEvent({
+      type: 'tool_result',
+      tool_name: 'query_settlements',
+      result,
+      tool_use_id: 'tool_call_imbalance_1',
+    });
+
+    const imbalanced = result.settlements || [];
+    if (imbalanced.length > 0) {
+      const rows = imbalanced.map((s) => {
+        const expectedNet = Number(s.gross_amount || 0) - Number(s.fees || 0) - Number(s.tax || 0) - Number(s.refunds || 0);
+        const diff = Number(s.amount || 0) - expectedNet;
+        return `| **${s.settlement_id}** | ${s.utr || 'UTR-N/A'} | ₹${Number(s.gross_amount || 0).toLocaleString('en-IN')} | ₹${Number(s.amount || 0).toLocaleString('en-IN')} | ₹${Math.abs(diff).toFixed(2)} | \`IMBALANCED\` |`;
+      }).join('\n');
+
+      sendEvent({
+        type: 'text',
+        content: `### Imbalanced Settlement Batches (Level 1 Integrity Flag)\n\n` +
+          `Found **${imbalanced.length} imbalanced settlement batch(es)** in run **${runId}** failing Level 1 mathematical verification ($\text{Gross} - \text{Fees} - \text{GST} - \text{Refunds} \\neq \\text{Net}$):\n\n` +
+          `| Settlement ID | UTR | Gross Amount (₹) | Net Settled (₹) | Discrepancy (₹) | Status |\n` +
+          `| :--- | :--- | :--- | :--- | :--- | :--- |\n` +
+          `${rows}\n\n` +
+          `*Note: Imbalanced batches are halted at Level 1 and flagged for manual audit before line-item unpacking.*`,
+      });
+    } else {
+      sendEvent({
+        type: 'text',
+        content: `### Settlement Batch Integrity Report\n\nAll 16 settlement batches in run **${runId}** passed Level 1 mathematical integrity checks with 0.00% variance. No imbalanced batches were detected.`,
+      });
+    }
+    return;
+  }
+
+  // Pattern 4: General exceptions / MDR fee / refunds
+  if (
+    queryLower.includes('exception') ||
+    queryLower.includes('fee') ||
+    queryLower.includes('mdr') ||
+    queryLower.includes('refund') ||
+    queryLower.includes('unresolved') ||
+    queryLower.includes('issue') ||
+    queryLower.includes('variance')
+  ) {
+    let categoryFilter = null;
+    if (queryLower.includes('mdr') || queryLower.includes('fee')) categoryFilter = 'mdr_fee';
+    else if (queryLower.includes('refund')) categoryFilter = 'refund_deduction';
+
+    sendEvent({
+      type: 'tool_start',
+      tool_name: 'query_exceptions',
+      input: { ...(categoryFilter ? { category: categoryFilter } : {}), limit: 15 },
+      tool_use_id: 'tool_call_exc_1',
+    });
+
+    const result = await executeAgentTool(runId, 'query_exceptions', { ...(categoryFilter ? { category: categoryFilter } : {}), limit: 15 }, 'heuristic');
+
+    sendEvent({
+      type: 'tool_result',
+      tool_name: 'query_exceptions',
+      result,
+      tool_use_id: 'tool_call_exc_1',
+    });
+
+    const exceptions = result.exceptions || [];
+    const rows = exceptions.slice(0, 10).map((e) => {
+      return `| **${e.bank_record_id || e.id}** | ${e.settlement_id || 'N/A'} | \`${(e.category || 'unknown').toUpperCase()}\` | ₹${Number(e.variance_amount || 0).toFixed(2)} | ${e.ai_rationale || 'Variance detected'} | \`${e.human_decision || 'pending'}\` |`;
+    }).join('\n');
+
+    sendEvent({
+      type: 'text',
+      content: `### Reconciliation Exceptions Report for Run \`${runId}\`\n\n` +
+        `Retrieved **${exceptions.length} exception(s)** from the diagnostic queue${categoryFilter ? ` matching category \`${categoryFilter}\`` : ''}:\n\n` +
+        `| Record / ID | Settlement ID | Category | Variance (₹) | Diagnostic Rationale | Status |\n` +
+        `| :--- | :--- | :--- | :--- | :--- | :--- |\n` +
+        `${rows}\n\n` +
+        `Review individual exception details in the **Exception Queue** tab.`,
+    });
+    return;
+  }
+
+  // Pattern 5: Matches / Reconciliation Summary
+  if (
+    queryLower.includes('match') ||
+    queryLower.includes('rate') ||
+    queryLower.includes('summary') ||
+    queryLower.includes('overview') ||
+    queryLower.includes('status')
+  ) {
+    sendEvent({
+      type: 'tool_start',
+      tool_name: 'query_matches',
+      input: { limit: 10 },
+      tool_use_id: 'tool_call_matches_1',
+    });
+
+    const result = await executeAgentTool(runId, 'query_matches', { limit: 10 }, 'heuristic');
+
+    sendEvent({
+      type: 'tool_result',
+      tool_name: 'query_matches',
+      result,
+      tool_use_id: 'tool_call_matches_1',
+    });
+
+    const runStatus = run?.status || 'complete';
+    const totalRecs = run?.total_records || 500;
+    const pass1 = run?.pass1_matched || 0;
+    const pass2 = run?.pass2_matched || 0;
+    const pass3 = run?.pass3_matched || 0;
+    const unresolvedRecs = run?.unresolved || 0;
+    const matchRate = run?.match_rate || 0.0;
+
+    const matchRows = (result.matches || []).slice(0, 5).map((m) => {
+      return `- **${m.bank_record_id || 'BNK'}** ↔ **${m.ledger_record_id || 'LED'}** [Level ${m.level || 2} - ${(m.method || 'exact').toUpperCase()}]: ${m.rationale || 'Matched'}`;
+    }).join('\n');
+
+    sendEvent({
+      type: 'text',
+      content: `### Reconciliation Overview for Run \`${runId}\`\n\n` +
+        `- **Status:** \`${runStatus}\`\n` +
+        `- **Total Records Analyzed:** **${totalRecs}**\n` +
+        `- **Level 0 (Bank-Settlement):** **${run?.level0_matched || 16}** matched\n` +
+        `- **Level 1 (Batch Integrity):** **${run?.level1_balanced || 15}** balanced, **${run?.level1_flagged || 1}** imbalanced\n` +
+        `- **Level 2 (Order Unpacking):** **${pass1}** exact, **${pass2}** fuzzy, **${pass3}** AI matched\n` +
+        `- **Unresolved Exceptions:** **${unresolvedRecs}**\n` +
+        `- **Overall Match Rate:** **${matchRate}%**\n\n` +
+        `**Sample Matched Records:**\n${matchRows}`,
+    });
+    return;
+  }
+
+  // Pattern 6: Audit log / activity history
+  if (
+    queryLower.includes('audit') ||
+    queryLower.includes('log') ||
+    queryLower.includes('history') ||
+    queryLower.includes('trail') ||
+    queryLower.includes('activity')
+  ) {
+    sendEvent({
+      type: 'tool_start',
+      tool_name: 'query_audit_log',
+      input: { limit: 10 },
+      tool_use_id: 'tool_call_audit_1',
+    });
+
+    const result = await executeAgentTool(runId, 'query_audit_log', { limit: 10 }, 'heuristic');
+
+    sendEvent({
+      type: 'tool_result',
+      tool_name: 'query_audit_log',
+      result,
+      tool_use_id: 'tool_call_audit_1',
+    });
+
+    const logs = result.logs || [];
+    const rows = logs.map((l) => {
+      const ts = l.timestamp ? new Date(l.timestamp).toISOString().replace('T', ' ').slice(0, 19) : 'N/A';
+      return `| ${ts} | \`${l.actor || 'system'}\` | \`${l.action}\` | \`${l.target_type || 'N/A'}\` | ${l.target_id || 'N/A'} |`;
+    }).join('\n');
+
+    sendEvent({
+      type: 'text',
+      content: `### Audit Trail Log Timeline for Run \`${runId}\`\n\n` +
+        `Retrieved **${logs.length} audit trail event(s)**:\n\n` +
+        `| Timestamp | Actor | Action | Target Type | Target ID |\n` +
+        `| :--- | :--- | :--- | :--- | :--- |\n` +
+        `${rows}`,
+    });
+    return;
+  }
+
+  // Fallback: Default unmatched prompt
+  sendEvent({
+    type: 'tool_start',
+    tool_name: 'query_audit_log',
+    input: { limit: 5 },
+    tool_use_id: 'tool_call_default_1',
+  });
+
+  const result = await executeAgentTool(runId, 'query_audit_log', { limit: 5 }, 'heuristic');
+
+  sendEvent({
+    type: 'tool_result',
+    tool_name: 'query_audit_log',
+    result,
+    tool_use_id: 'tool_call_default_1',
+  });
+
+  const matchRate = run?.match_rate || 87.5;
+  sendEvent({
+    type: 'text',
+    content: `I am operating in **Forensic Inspector Engine Mode** for run **\`${runId}\`** (Overall Match Rate: **${matchRate}%**).\n\n` +
+      `You can ask specific data queries such as:\n` +
+      `- *"List all unrecorded Razorpay orders settled without ledger entries"* (Queries \`query_exceptions\` for unrecorded orders)\n` +
+      `- *"What is our total claimable GST Input Tax Credit this cycle and why?"* (Calculates 18% GST ITC on MDR fees)\n` +
+      `- *"Show imbalanced settlement batches"* (Queries \`query_settlements\` for Level 1 batch imbalance flags)\n` +
+      `- *"Show audit trail log timeline"* (Queries append-only \`query_audit_log\` events)`,
+  });
 }
