@@ -1,143 +1,148 @@
-# ReconcileAI — Autonomous Financial Reconciliation & Settlement Intelligence Platform
+# ReconcileAI
 
-[![Live Production](https://img.shields.io/badge/Live%20Demo-Vercel%20Production-blue?style=for-the-badge&logo=vercel)](https://reconcile-ai-server.vercel.app/)
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green?style=for-the-badge&logo=node.js)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas%20Cached-forestgreen?style=for-the-badge&logo=mongodb)](https://www.mongodb.com/)
-[![Claude 3.5 Sonnet](https://img.shields.io/badge/Claude%203.5-Anthropic%20AI-purple?style=for-the-badge&logo=anthropic)](https://www.anthropic.com/)
+**An intelligent settlement reconciliation system that automatically unpacks lumped payment-gateway payouts back down to the order level — flagging what it can't resolve instead of guessing, and producing books-ready output instead of just a report.**
 
-**Live Production Deployment**: [https://reconcile-ai-server.vercel.app/](https://reconcile-ai-server.vercel.app/)
+Built for the Razorpay AI Buildathon 2026 (AI Finance Controller track).
 
-**ReconcileAI** is a multi-source financial reconciliation engine built specifically for **Razorpay Buildathon Track 04 (AI Finance Controller)**. It solves the complex **N-to-1 Payment Gateway Settlement Unpacking Problem** by bridging lump-sum bank statement credits, payment gateway batch settlements (such as Razorpay), and internal ERP sales ledgers. ReconcileAI differentiates on **explainability and auditability** — delivering 3-tier GST/MDR unpacking, a governed Human-in-the-Loop (HITL) approval loop, and a conversational forensic auditor that enterprise recon tools typically do not expose in a demo-friendly format.
+**Live:** https://reconcile-ai-server.vercel.app/
 
 ---
 
-## 📌 Verified Production & Validation Metrics
+## The Problem
 
-Tested and verified live on **[reconcile-ai-server.vercel.app](https://reconcile-ai-server.vercel.app/)**:
+When a payment gateway like Razorpay settles funds to a merchant's bank account, it doesn't send one credit per order. It batches hundreds of individual payments into a single lumped NEFT/RTGS credit — typically on a T+2 cycle — net of:
 
-### Primary Benchmark Dataset (520 Transactions)
-- **Dataset Scale**: **520 transactions** unpacked across **16 settlement batches** and 17 bank credits.
-- **Autonomous Multi-Tier Match Rate**: **86.35%** (449 constituent orders automatically cleared).
-- **Level 0 (Bank-to-Settlement Tracking)**: **16 / 17 Matched (94.1%)** via UTR correlation.
-- **Level 1 (Mathematical Batch Integrity Gate)**: **15 Batches Balanced**, 1 Gateway Imbalance flagged before ledger contamination.
-- **Level 2 (Constituent Order Unpacking & Tax Breakdown)**: **449 Orders Matched**, 2.0% MDR fees and 18% GST Input Tax Credits (ITC) isolated.
-- **Execution Speed**: Full multi-tier reconciliation completes in **~5.3 ms** locally and **< 2.8 seconds** on serverless.
-- **Unit Test Suite & Coverage**: **35 / 35 passing tests** across matching heuristics, mathematical integrity gates, and edge cases.
+- MDR (Merchant Discount Rate) fees, roughly 2% per transaction
+- 18% GST charged on top of that MDR fee
+- Any refunds processed within that settlement cycle
 
-### Held-Out Validation Dataset (524 Transactions — Unseen Seed & Edge Cases)
-*Evaluated live via `npm run bench` on an independent held-out dataset containing partial refunds, 14-day timing gaps, duplicate UTRs, and multiple imbalanced batches:*
-- **Match Rate**: **81.30%** (426 / 524 constituent orders cleared).
-- **False-Positive Rate (FPR)**: **0.00%** (Zero false matches committed due to Level 1 mathematical integrity gates).
-- **False-Negative Rate (FNR)**: **18.70%** (98 complex exception items routed to HITL queue).
-- **Reproducibility**: Run `npm run bench` to reproduce both benchmark and held-out metrics live from stdout.
+The bank statement shows exactly **one row**. But that row actually represents hundreds of individual customer orders, each with its own gross amount, its own fee deduction, its own tax, and possibly its own refund adjustment. Without unpacking this batch back down to the order level, a business cannot post revenue and expense entries to the correct accounts, and cannot correctly claim GST Input Tax Credit (ITC) on the fees it paid.
 
----
+This is the real reconciliation problem merchants using any payment gateway deal with — not a simplified "match list A against list B" exercise.
 
-## 🧭 How to Use the Website (Interactive User Guide)
+## The Solution — A 3-Level Unpacking Pipeline
 
-Using ReconcileAI is fast and intuitive:
+1. **Level 0 — Bank Deposit Matching**: matches the single bulk bank credit to a settlement batch header, using UTR and net amount checksums.
+2. **Level 1 — Batch Integrity Check**: verifies the arithmetic of every settlement batch — `sum(gross − fee − tax − refunds) = net bank credit`, within ₹0.05 tolerance. An imbalanced batch is quarantined and flagged immediately rather than unpacked further, because unpacking numbers that don't already add up would just propagate an error.
+3. **Level 2 — Order Unpacking & Tax Breakdown**: matches each individual line item back to the internal ledger order, isolating the MDR fee, the GST on that fee, refund deductions, rounding differences, and partial settlements — each categorized specifically, not lumped into one generic "exception."
+
+Whatever can't be confidently resolved by deterministic + fuzzy matching gets reasoned through individually by Claude, which explains *why* — duplicate, refund, bank fee, timing lag, unrecorded, or genuinely unknown — rather than just marking it red.
+
+## Architecture
 
 ```
-[1. Load Data] ──▶ [2. Explore Architecture] ──▶ [3. Run Engine] ──▶ [4. Review & Approve]
+┌─────────────────┐     ┌──────────────────────┐     ┌──────────────────┐
+│  React Frontend  │ <-> │  Express/Node Backend │ <-> │  MongoDB Atlas    │
+│  Vite + Tailwind │     │  - Matching Engine     │     │  - bank_records   │
+│  - Dashboard     │     │  - Claude Orchestrator │     │  - settlement_*   │
+│  - Exceptions    │     │  - Agent Tool Router   │     │  - ledger_records │
+│  - Draft Actions │     │  - Auth + Audit hooks  │     │  - matches         │
+│  - Audit Trail   │     └───────────┬────────────┘     │  - exceptions      │
+│  - Ask AI drawer │                 │                  │  - draft_actions   │
+└─────────────────┘                 ▼                  │  - audit_log       │
+                            ┌──────────────────┐        └──────────────────┘
+                            │   Claude API      │
+                            │  - Level 2 reasoning│
+                            │  - Ask AI tool-use  │
+                            │  - Draft-action gen │
+                            └──────────────────┘
 ```
 
-### Step 1: Initialize Reconciliation Data
-- **Option A (Instant Benchmark)**: Click **"Try with Benchmark Data (500 records)"** on the top hero banner to instantly spin up a full enterprise test suite with 16 settlement batches and 500+ customer transactions.
-- **Option B (Custom Data)**: Click **"New Run"** in the top navbar to upload your own custom Bank Statement CSV, Razorpay Settlement CSV, and ERP Sales Journal CSV files with instant client-side schema validation.
+**Request flow — a reconciliation run:**
 
-### Step 2: Explore the Interactive Storytelling Sections
-Scroll through the platform's **interactive sections** using the top navigation bar:
-- **02 & 03 Flowcharts**: Click any pipeline node to inspect real data transformation contracts and schemas.
-- **04 Decision Tree & Tax Simulator**: Slide the interactive MDR & GST calculator to see how tax credits are isolated in real time.
-- **05 Heuristic Timeline**: Compare Level 0 Bank Matching, Level 1 Batch Integrity, Level 2 Order Unpacking, and Pass 3 AI Reasoner tolerances.
-- **09 & 10 Architecture & Verification**: Inspect the full-stack system topology and view verified test suites.
+1. Bank statement + settlement report + ledger data are ingested (upload or synthetic seed).
+2. **Level 0** matches the single bank credit to its settlement batch (UTR + net amount + date).
+3. **Level 1** verifies the batch's own arithmetic balances within ₹0.05 — an imbalanced batch is flagged immediately, not unpacked further.
+4. **Level 2** unpacks the batch into individual order-level line items, using deterministic exact-matching first, then fuzzy matching, then — only for what's still unresolved — Claude reasoning, to keep AI cost and latency bounded.
+5. Every match and exception is written to MongoDB with a full audit trail entry.
+6. The frontend reflects progress in real time — Socket.io locally, polling in production, since Vercel's serverless functions don't support long-lived WebSocket connections.
 
-### Step 3: Execute Autonomous Reconciliation
-- Click **"Run Full Reconciliation"** in the dashboard workbench.
-- Watch the **Live Progress Stepper** transition in real time via the 2.5s serverless polling loop:
-  - **Level 0**: Correlates bank credits to gateway settlement batches.
-  - **Level 1**: Validates mathematical integrity across all batches.
-  - **Level 2**: Unpacks constituent orders and separates claimable GST ITC.
-  - **Pass 3 (AI)**: Diagnoses variances (timing lags, gateway fees, refunds) and drafts remediation tickets.
+**Request flow — Ask AI:**
 
-### Step 4: Inspect Exceptions & Drilldowns
-- Navigate to the **Exceptions Tab** to view exceptions categorized by *Gateway Fees*, *Batch Mismatches*, *Tax Credits*, and *Timing Differences*.
-- Click **"Inspect Payout Worksheet"** on any settlement batch row to open the modal showing gross volume, fees deducted, claimable tax credits, and constituent orders.
+A question comes in → Claude is given read-only tool access to query matches, exceptions, the audit log, and individual records, scoped to the current run → it answers using only what those tools return, citing real record IDs → every tool call is itself logged to the audit trail.
 
-### Step 5: Review Human-in-the-Loop (HITL) Draft Actions
-- Navigate to the **Draft Actions Tab** to view AI-generated vendor inquiry emails and adjusting journal entries.
-- Review, edit inline, and click **Approve & Dispatch** or **Reject** to post adjustments directly with 0ms perceived latency and idempotency protection.
+**Request flow — Draft actions:**
 
-### Step 6: Ask the AI Forensic Auditor
-- Click the **"Ask AI"** button in the navigation bar to open the slide-out conversational auditor.
-- Query transaction details, ask for settlement batch breakdowns, or calculate total claimable GST ITC in plain English using scoped read-only database tools.
+Claude proposes a next action (e.g. a vendor follow-up email) for a resolvable exception → it's written as `pending_approval`, no side effect yet → a human reviews, optionally edits, and approves → only then does the action execute, and it's recorded as idempotent (a duplicate approval click is a no-op, not a duplicate action).
 
----
+**Deployment notes:** Running on Vercel required adapting away from a few defaults a traditional always-on Express server would use — a serverless-safe cached MongoDB connection instead of a fresh connection per request, polling instead of relying on Socket.io, and bounded-concurrency batching for Claude API calls to stay within serverless execution time limits.
 
-## 🏗️ 3-Tier Architecture & Data Flow
+Full details — including the exact database schema, API contracts, and Claude prompt contracts — are in [`/docs`](./docs) and [`MASTER_SPEC.md`](./MASTER_SPEC.md).
 
-```mermaid
-flowchart TD
-    subgraph INGESTION ["1. Ingestion & Validation Layer"]
-        A["Bank Statement CSV"] -->|"PapaParse & Zod"| V1["Bank Record Ingestion"]
-        B["Razorpay Settlement CSV"] -->|"PapaParse & Zod"| V2["Settlement Report Ingestion"]
-        C["Internal ERP Sales Orders"] -->|"PapaParse & Zod"| V3["Ledger Order Ingestion"]
-    end
+## Verified Results
 
-    subgraph ENGINE ["2. Autonomous Multi-Pass Engine"]
-        V1 & V2 --> L0["Level 0: UTR / Reference Bank Matching (94.1% Matched)"]
-        L0 --> L1["Level 1: Mathematical Batch Integrity Gate (15 Balanced / 1 Flagged)"]
-        L1 -->|Balanced Batches| L2["Level 2: Order Unpacking & Tax Isolation (87.5% Matched)"]
-        L1 -->|Imbalanced Batches| EX1["Exceptions: Batch Mismatch Flagged"]
-        L2 -->|Unmatched / Variances| P3["Pass 3: Claude 3.5 Sonnet / Forensic Reasoner"]
-    end
+From a real run on a synthetic 520-record dataset (all numbers below are from an actual execution, not estimates):
 
-    subgraph AUDIT ["3. Governance & HITL Actions"]
-        P3 --> DRAFT["Draft Remediation Actions (Vendor Emails / Adjusting Entries)"]
-        DRAFT --> HITL["Human-in-the-Loop Approval"]
-        HITL --> ALOG["Immutable SHA-256 Audit Trail"]
-    end
-```
+| Metric | Result |
+|---|---|
+| Total records processed | 520 |
+| Level 0 — bank↔settlement matches | 16 / 17 batches |
+| Level 1 — batches passing integrity check | 15 / 16 |
+| Automatically matched (deterministic) | 462 |
+| Resolved via AI reasoning | 33 |
+| Flagged for human review | 25 |
+| **Overall resolution rate** | **95.19%** |
+| GST Input Tax Credit identified | ₹35,234.59 |
+| Total settlement volume processed | ₹90,75,267.03 |
 
----
+The 25 flagged cases are intentional, not hidden — a reconciliation tool claiming 100% accuracy on real-world settlement data would be a red flag, not an achievement. Those are exactly the cases that should reach a human.
 
-## 🚀 Local Development & Testing
+## Beyond Flagging — Books-Ready Output
 
-### Prerequisites
-- Node.js >= 18.0.0
-- MongoDB Atlas or local MongoDB instance
+Most reconciliation demos stop at "here's a dashboard with a match rate." ReconcileAI goes further:
 
-### Quick Start
+- **Business Impact panel** — translates the technical numbers into what a finance controller actually cares about: claimable GST ITC in rupees, estimated hours saved vs. manual review (with the assumption stated explicitly, never overstated as measured fact), and total settlement volume processed.
+- **Exportable Reconciliation Journal (CSV)** — one row per resolved line item with the exact columns an accountant needs to post entries: date, order ID, settlement ID, gross amount, MDR fee, GST on MDR, net settled, account category, variance category, resolution status.
+- **Reconciliation Certificate** — a downloadable summary suitable for a monthly close or an audit request: run totals, match rate, GST ITC identified, and every unresolved exception with its category.
+
+## Conversational Forensic Assistant
+
+An "Ask AI" panel, accessible from every screen, lets you query the current run in plain language — grounded in the actual database via read-only tool calls, not a hallucinated answer:
+
+- Suggested questions are generated from the *actual* current run (e.g. a real imbalanced batch ID if one exists), not hardcoded examples.
+- When the answer references a specific record, that reference is clickable and jumps you straight to it in the Exception Queue or Settlement Worksheet.
+- The conversation retains context across follow-up questions within a session.
+- If Claude's API is unavailable, the assistant says so honestly and falls back to a deterministic answer path — it never silently pretends to be running real AI reasoning when it isn't.
+
+## Human-in-the-Loop, Always
+
+The system can draft next actions for resolvable exceptions — a vendor follow-up email, a ledger correction entry — but never executes anything automatically. Every draft requires explicit human review and approval before any real effect happens, and approving is idempotent (clicking Approve twice never creates a duplicate action).
+
+## Full Audit Trail
+
+Every match, exception, and approval is logged to an append-only audit trail — enforced at the schema level, not just by convention. Nothing in this system can quietly rewrite its own history.
+
+## Tech Stack
+
+- **Frontend:** React, Vite, Tailwind CSS
+- **Backend:** Node.js, Express, MongoDB (Atlas), serverless-safe connection caching
+- **Real-time:** Socket.io locally, polling in production (Vercel's serverless model doesn't support long-lived WebSocket connections)
+- **AI reasoning:** Claude API — used specifically for the minority of cases simple rule-based matching can't confidently resolve, not as a blanket solution for the whole pipeline
+- **Deployment:** Vercel
+
+## Getting Started
+
 ```bash
-# 1. Clone repository
 git clone https://github.com/Karan174Pareek/Reconcile-AI.git
 cd Reconcile-AI
-
-# 2. Install dependencies
-npm run install:all
-
-# 3. Configure environment variables
-cp server/.env.example server/.env
-
-# 4. Run test suite (31/31 unit tests)
-npm test --prefix server
-
-# 5. Build client bundle with automated server sync
-npm run build
-
-# 6. Start development servers
-npm run dev
+cp server/.env.example server/.env   # add your Claude API key and MongoDB URI
+npm install --prefix server
+npm install --prefix client
+npm run seed --prefix server
+npm run dev --prefix server
+npm run dev --prefix client
 ```
 
----
+## Documentation
 
-## 📄 Documentation Sitemap
+Full design docs are in [`/docs`](./docs) and [`MASTER_SPEC.md`](./MASTER_SPEC.md) — product requirements, architecture, database schema, API contracts, Claude prompt contracts, security considerations, and error-handling strategy.
 
-- [docs/prd.md](file:///c:/Users/karan/OneDrive/Desktop/Reconcile%20AI/docs/prd.md) — Product Requirements Document & Functional Specification
-- [docs/architecture.md](file:///c:/Users/karan/OneDrive/Desktop/Reconcile%20AI/docs/architecture.md) — Multi-Tier System Topology & Data Flow
-- [docs/database.md](file:///c:/Users/karan/OneDrive/Desktop/Reconcile%20AI/docs/database.md) — MongoDB Schemas, Indexes & Integrity Constraints
-- [docs/api.md](file:///c:/Users/karan/OneDrive/Desktop/Reconcile%20AI/docs/api.md) — REST API Endpoints & Real-Time SSE Streams
-- [docs/prompts.md](file:///c:/Users/karan/OneDrive/Desktop/Reconcile%20AI/docs/prompts.md) — Claude 3.5 Sonnet Structured Prompts & Schemas
-- [docs/security.md](file:///c:/Users/karan/OneDrive/Desktop/Reconcile%20AI/docs/security.md) — Zero-Trust Security, Serverless Access & Compliance
-- [docs/error-handling.md](file:///c:/Users/karan/OneDrive/Desktop/Reconcile%20AI/docs/error-handling.md) — Fault Tolerance, Rate Limiting & Backoff
-- [DEMO_SCRIPT.md](file:///c:/Users/karan/OneDrive/Desktop/Reconcile%20AI/DEMO_SCRIPT.md) — 5-Minute Production Walkthrough & Demonstration Guide
+## Known Limitations (stated plainly, not hidden)
+
+- Demo-scoped: no production-grade encryption-at-rest configuration or rate limiting beyond what MongoDB Atlas and Vercel provide by default.
+- Synthetic settlement data only — no live payment gateway integration in this submission.
+- Estimated time-savings figures are explicitly labeled assumptions, not measured facts.
+
+## About
+
+Built by **Karan** — 4th-year BCA student at MAKAUT, co-founder of Ignitia Digital. This project reflects how I approach engineering problems: understand the real workflow before writing code, design for the failure cases before the happy path, and build systems that are honest about what they couldn't resolve rather than ones that look flawless on the surface.
