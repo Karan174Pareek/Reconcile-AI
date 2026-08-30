@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import AuditLog from '../models/AuditLog.js';
 import { MemoryStore } from '../services/memoryStore.js';
+import { ensureDbReady } from '../config/db.js';
 
 /**
  * Controller: Get audit trail timeline for a run
@@ -13,6 +14,7 @@ export async function getRunAuditLogs(req, res, next) {
 
     const maxLimit = Math.min(200, Math.max(1, parseInt(limit, 10) || 100));
     let mongoLogs = [];
+    await ensureDbReady();
     if (mongoose.connection.readyState === 1) {
       try {
         const query = { run_id };
@@ -114,6 +116,7 @@ export async function postAuditLog(req, res, next) {
       details: details || {},
     };
 
+    await ensureDbReady();
     if (mongoose.connection.readyState === 1) {
       try {
         await AuditLog.create(event);

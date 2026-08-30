@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import DraftAction from '../models/DraftAction.js';
 import AuditLog from '../models/AuditLog.js';
 import { MemoryStore } from '../services/memoryStore.js';
+import { ensureDbReady } from '../config/db.js';
 
 function ensureGeneratedDrafts(runId) {
   let draftActions = MemoryStore.getDraftActions(runId);
@@ -46,6 +47,7 @@ export async function getRunDraftActions(req, res, next) {
 
     let draftActions = [];
 
+    await ensureDbReady();
     if (mongoose.connection.readyState === 1) {
       try {
         const query = { run_id };
@@ -86,6 +88,7 @@ export async function approveDraftAction(req, res, next) {
 
     let draft = null;
 
+    await ensureDbReady();
     if (mongoose.connection.readyState === 1) {
       try {
         const conditions = [];
@@ -238,6 +241,7 @@ export async function rejectDraftAction(req, res, next) {
 
     let draft = null;
 
+    await ensureDbReady();
     if (mongoose.connection.readyState === 1) {
       try {
         const conditions = [];

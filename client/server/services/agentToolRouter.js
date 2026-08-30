@@ -8,6 +8,7 @@ import DraftAction from '../models/DraftAction.js';
 import AuditLog from '../models/AuditLog.js';
 import mongoose from 'mongoose';
 import { MemoryStore } from './memoryStore.js';
+import { ensureDbReady } from '../config/db.js';
 
 /**
  * Anthropic Claude tool calling definitions for read-only reconciliation queries
@@ -42,7 +43,7 @@ export const CLAUDE_AGENT_TOOLS = [
       properties: {
         settlement_id: {
           type: 'string',
-          description: 'The unique settlement ID (e.g. setl_xxx)',
+          description: 'The unique Razorpay settlement ID (e.g. setl_001)',
         },
       },
     },
@@ -78,13 +79,13 @@ export const CLAUDE_AGENT_TOOLS = [
   {
     name: 'query_exceptions',
     description:
-      'Search and inspect diagnosed settlement exceptions and variances (MDR fee, GST ITC deductions, refunds, batch imbalances, unrecorded orders).',
+      'Search and filter unmatched reconciliation exceptions (MDR fee variances, 18% GST, refunds, partial settlements, unrecorded orders).',
     input_schema: {
       type: 'object',
       properties: {
         settlement_id: {
           type: 'string',
-          description: 'Filter exceptions belonging to a specific settlement batch',
+          description: 'Filter exceptions by Razorpay settlement ID',
         },
         category: {
           type: 'string',
@@ -95,17 +96,17 @@ export const CLAUDE_AGENT_TOOLS = [
             'rounding',
             'partial_settlement',
             'unrecorded',
-            'batch_imbalance',
+            'unknown',
             'duplicate',
             'timing_lag',
-            'unknown',
+            'bank_fee',
           ],
-          description: 'Filter by diagnosed variance category',
+          description: 'Filter by financial variance category',
         },
         human_decision: {
           type: 'string',
-          enum: ['pending', 'accepted', 'rejected', 'manually_resolved'],
-          description: 'Filter by human review decision status',
+          enum: ['pending', 'accepted', 'rejected', 'escalated'],
+          description: 'Filter by human auditor decision status',
         },
         limit: {
           type: 'integer',
@@ -117,18 +118,18 @@ export const CLAUDE_AGENT_TOOLS = [
   {
     name: 'query_audit_log',
     description:
-      'Inspect the append-only audit trail of system events, human actions, and AI operations for this run.',
+      'Retrieve append-only audit trail logs for this run, including matching decisions, AI reasoning, and human resolution actions.',
     input_schema: {
       type: 'object',
       properties: {
         target_type: {
           type: 'string',
-          enum: ['match', 'exception', 'draft_action', 'agent_query', 'settlement'],
-          description: 'Filter audit logs by target type',
+          enum: ['run', 'match', 'exception', 'draft_action', 'agent_query'],
+          description: 'Filter audit logs by target entity type',
         },
         limit: {
           type: 'integer',
-          description: 'Max records to return (default 20, max 50)',
+          description: 'Max log records to return (default 20, max 50)',
         },
       },
     },
@@ -194,18 +195,35 @@ export const GEMINI_AGENT_TOOLS = CLAUDE_AGENT_TOOLS.map((t) => ({
  * Dispatches a tool call from Claude Conversational Agent securely (read-only execution)
  */
 export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 'claude') {
+  await ensureDbReady();
+
   const limit = Math.min(Math.max(1, Number(inputArgs.limit) || 20), 50);
   let result = null;
 
   switch (toolName) {
     case 'query_settlements': {
-      const query = { run_id: runId };
-      if (inputArgs.integrity_status) query.integrity_status = inputArgs.integrity_status;
+      let settlements = [];
+      if (mongoose.connection.readyState === 1) {
+        try {
+          const query = { run_id: runId };
+          if (inputArgs.integrity_status) query.integrity_status = inputArgs.integrity_status;
 
-      const settlements = await SettlementReport.find(query)
-        .limit(limit)
-        .sort({ settled_at: -1 })
-        .lean();
+          settlements = await SettlementReport.find(query)
+            .limit(limit)
+            .sort({ settled_at: -1 })
+            .lean();
+        } catch (e) {
+          console.warn('[Mongo query_settlements Warning]:', e.message);
+        }
+      }
+
+      if (settlements.length === 0) {
+        settlements = MemoryStore.getSettlementReports(runId);
+        if (inputArgs.integrity_status) {
+          settlements = settlements.filter((s) => s.integrity_status === inputArgs.integrity_status);
+        }
+        settlements = settlements.slice(0, limit);
+      }
 
       result = {
         count: settlements.length,
@@ -233,19 +251,42 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 
         break;
       }
 
-      const settlement = await SettlementReport.findOne({ run_id: runId, settlement_id }).lean();
+      let settlement = null;
+      let lineItems = [];
+      let bankRecord = null;
+
+      if (mongoose.connection.readyState === 1) {
+        try {
+          settlement = await SettlementReport.findOne({ run_id: runId, settlement_id }).lean();
+          if (settlement) {
+            lineItems = await SettlementLineItem.find({ run_id: runId, settlement_id })
+              .limit(100)
+              .lean();
+
+            if (settlement.bank_record_id) {
+              bankRecord = await BankRecord.findOne({ run_id: runId, id: settlement.bank_record_id }).lean();
+            }
+          }
+        } catch (e) {
+          console.warn('[Mongo get_settlement_detail Warning]:', e.message);
+        }
+      }
+
+      if (!settlement) {
+        const reports = MemoryStore.getSettlementReports(runId);
+        settlement = reports.find((s) => s.settlement_id === settlement_id) || null;
+        if (settlement) {
+          const allLines = MemoryStore.getSettlementLineItems(runId);
+          lineItems = allLines.filter((li) => li.settlement_id === settlement_id).slice(0, 100);
+          const allBank = MemoryStore.getBankRecords(runId);
+          bankRecord = allBank.find((b) => b.id === settlement.bank_record_id) || null;
+        }
+      }
+
       if (!settlement) {
         result = { error: `Settlement "${settlement_id}" not found` };
         break;
       }
-
-      const lineItems = await SettlementLineItem.find({ run_id: runId, settlement_id })
-        .limit(100)
-        .lean();
-
-      const bankRecord = settlement.bank_record_id
-        ? await BankRecord.findOne({ run_id: runId, id: settlement.bank_record_id }).lean()
-        : null;
 
       result = {
         settlement,
@@ -309,12 +350,28 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 
     }
 
     case 'query_exceptions': {
-      const query = { run_id: runId };
-      if (inputArgs.settlement_id) query.settlement_id = inputArgs.settlement_id;
-      if (inputArgs.category) query.category = inputArgs.category;
-      if (inputArgs.human_decision) query.human_decision = inputArgs.human_decision;
+      let exceptions = [];
+      if (mongoose.connection.readyState === 1) {
+        try {
+          const query = { run_id: runId };
+          if (inputArgs.settlement_id) query.settlement_id = inputArgs.settlement_id;
+          if (inputArgs.category) query.category = inputArgs.category;
+          if (inputArgs.human_decision) query.human_decision = inputArgs.human_decision;
 
-      const exceptions = await Exception.find(query).limit(limit).sort({ created_at: -1 }).lean();
+          exceptions = await Exception.find(query).limit(limit).sort({ created_at: -1 }).lean();
+        } catch (e) {
+          console.warn('[Mongo query_exceptions Warning]:', e.message);
+        }
+      }
+
+      if (exceptions.length === 0) {
+        exceptions = MemoryStore.getExceptions(runId);
+        if (inputArgs.settlement_id) exceptions = exceptions.filter((e) => e.settlement_id === inputArgs.settlement_id);
+        if (inputArgs.category) exceptions = exceptions.filter((e) => e.category === inputArgs.category);
+        if (inputArgs.human_decision) exceptions = exceptions.filter((e) => e.human_decision === inputArgs.human_decision);
+        exceptions = exceptions.slice(0, limit);
+      }
+
       result = {
         count: exceptions.length,
         exceptions: exceptions.map((e) => ({
@@ -337,14 +394,28 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 
     }
 
     case 'query_audit_log': {
-      const query = { run_id: runId };
-      if (inputArgs.target_type) query.target_type = inputArgs.target_type;
+      let logs = [];
+      if (mongoose.connection.readyState === 1) {
+        try {
+          const query = { run_id: runId };
+          if (inputArgs.target_type) query.target_type = inputArgs.target_type;
 
-      const logs = await AuditLog.find(query).limit(limit).sort({ timestamp: -1 }).lean();
+          logs = await AuditLog.find(query).limit(limit).sort({ timestamp: -1 }).lean();
+        } catch (e) {
+          console.warn('[Mongo query_audit_log Warning]:', e.message);
+        }
+      }
+
+      if (logs.length === 0) {
+        logs = MemoryStore.getAuditLogs(runId);
+        if (inputArgs.target_type) logs = logs.filter((l) => l.target_type === inputArgs.target_type);
+        logs = logs.slice(0, limit);
+      }
+
       result = {
         count: logs.length,
         logs: logs.map((l) => ({
-          id: l._id?.toString(),
+          id: l._id?.toString() || l.id,
           actor: l.actor,
           action: l.action,
           target_type: l.target_type,
@@ -359,55 +430,50 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 
     case 'get_record_by_id': {
       const { collection, id } = inputArgs;
       if (!collection || !id) {
-        return { error: 'Both collection and id are required' };
+        result = { error: 'collection and id are required' };
+        break;
       }
 
       let doc = null;
-      switch (collection) {
-        case 'settlement_reports':
-          doc = await SettlementReport.findOne({
-            run_id: runId,
-            $or: [{ settlement_id: id }, { utr: id }],
-          }).lean();
-          break;
-        case 'settlement_line_items':
-          doc = await SettlementLineItem.findOne({
-            run_id: runId,
-            $or: [{ payment_id: id }, { order_id: id }],
-          }).lean();
-          break;
-        case 'bank_records':
-          doc = await BankRecord.findOne({
-            run_id: runId,
-            $or: [{ id }, { utr_ref: id }],
-          }).lean();
-          break;
-        case 'ledger_records':
-          doc = await LedgerRecord.findOne({
-            run_id: runId,
-            $or: [{ id }, { order_id: id }, { invoice_ref: id }],
-          }).lean();
-          break;
-        case 'matches':
-          doc = await Match.findOne({
-            run_id: runId,
-            $or: [{ bank_record_id: id }, { settlement_id: id }, { payment_id: id }, { order_id: id }],
-          }).lean();
-          break;
-        case 'exceptions':
-          doc = await Exception.findOne({
-            run_id: runId,
-            $or: [{ bank_record_id: id }, { settlement_id: id }, { payment_id: id }, { order_id: id }],
-          }).lean();
-          break;
-        case 'draft_actions':
-          doc = await DraftAction.findOne({
-            run_id: runId,
-            $or: [{ exception_id: id }],
-          }).lean();
-          break;
-        default:
-          return { error: `Invalid collection: ${collection}` };
+      if (mongoose.connection.readyState === 1) {
+        try {
+          switch (collection) {
+            case 'bank_records':
+              doc = await BankRecord.findOne({ run_id: runId, id }).lean();
+              break;
+            case 'ledger_records':
+              doc = await LedgerRecord.findOne({ run_id: runId, $or: [{ id }, { order_id: id }] }).lean();
+              break;
+            case 'settlement_reports':
+              doc = await SettlementReport.findOne({ run_id: runId, settlement_id: id }).lean();
+              break;
+            case 'settlement_line_items':
+              doc = await SettlementLineItem.findOne({ run_id: runId, $or: [{ payment_id: id }, { id }] }).lean();
+              break;
+            case 'matches':
+              doc = await Match.findOne({
+                run_id: runId,
+                $or: [{ bank_record_id: id }, { settlement_id: id }, { payment_id: id }, { order_id: id }],
+              }).lean();
+              break;
+            case 'exceptions':
+              doc = await Exception.findOne({
+                run_id: runId,
+                $or: [{ bank_record_id: id }, { settlement_id: id }, { payment_id: id }, { order_id: id }],
+              }).lean();
+              break;
+            case 'draft_actions':
+              doc = await DraftAction.findOne({
+                run_id: runId,
+                $or: [{ exception_id: id }],
+              }).lean();
+              break;
+            default:
+              return { error: `Invalid collection: ${collection}` };
+          }
+        } catch (e) {
+          console.warn('[Mongo get_record_by_id Warning]:', e.message);
+        }
       }
 
       if (!doc) {
@@ -424,22 +490,31 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 
   }
 
   // Audit Logging for Agent Tool Execution
-  try {
-    await AuditLog.create({
-      run_id: runId,
-      actor: actor || 'agent',
-      action: `agent_tool_call:${toolName}`,
-      target_type: 'agent_query',
-      target_id: inputArgs.id || inputArgs.settlement_id || null,
-      details: {
-        tool: toolName,
-        arguments: inputArgs,
-      },
-    });
-  } catch (auditErr) {
-    console.warn('[AuditLog] Agent tool logging note:', auditErr.message);
+  const auditEntry = {
+    id: `audit_tool_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    run_id: runId,
+    actor: actor || 'agent',
+    action: `agent_tool_call:${toolName}`,
+    target_type: 'agent_query',
+    target_id: inputArgs.id || inputArgs.settlement_id || null,
+    timestamp: new Date().toISOString(),
+    details: {
+      tool: toolName,
+      arguments: inputArgs,
+    },
+  };
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      await AuditLog.create(auditEntry);
+    } catch (auditErr) {
+      console.warn('[AuditLog] Agent tool logging note:', auditErr.message);
+    }
   }
+
+  const existingLogs = MemoryStore.getAuditLogs(runId);
+  existingLogs.unshift(auditEntry);
+  MemoryStore.saveAuditLogs(runId, existingLogs);
 
   return result;
 }
-

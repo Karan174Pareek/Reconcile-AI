@@ -55,6 +55,18 @@ export const connectDB = async (customUri) => {
   return cached.conn;
 };
 
+export const ensureDbReady = async () => {
+  if (mongoose.connection.readyState === 1) {
+    return cached.conn || mongoose.connection;
+  }
+  try {
+    return await connectDB();
+  } catch (e) {
+    console.warn('[ensureDbReady Warning]: Unable to establish MongoDB connection:', e.message);
+    return null;
+  }
+};
+
 export const disconnectDB = async () => {
   try {
     await mongoose.disconnect();

@@ -4,6 +4,7 @@ import { CLAUDE_AGENT_TOOLS, GEMINI_AGENT_TOOLS, executeAgentTool } from '../ser
 import Run from '../models/Run.js';
 import { MemoryStore } from '../services/memoryStore.js';
 import { getSanitizedAnthropicKey, getSanitizedGeminiKey } from '../services/claudeOrchestrator.js';
+import { ensureDbReady } from '../config/db.js';
 
 const AGENT_SYSTEM_PROMPT = `You are ReconcileAI's Tier-3 Senior Forensic Financial Assistant.
 You have real-time read-only access to the active reconciliation database for this run via tool functions.
@@ -48,6 +49,8 @@ export async function streamAgentChat(req, res, next) {
   let run = null;
 
   try {
+    await ensureDbReady();
+
     try {
       if (mongoose.connection.readyState === 1) {
         run = await Run.findOne({ run_id }).lean();
@@ -295,6 +298,8 @@ async function handleGeminiAgentConversation(runId, run, messages, geminiKey, se
  * Handles offline agent queries using real MongoDB queries via agentToolRouter and generates formatted answers
  */
 async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
+  await ensureDbReady();
+
   sendEvent({
     type: 'engine_info',
     engine: 'heuristic',
