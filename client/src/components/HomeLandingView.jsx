@@ -1,15 +1,9 @@
 import React from 'react';
 import SectionNav from './storytelling/SectionNav.jsx';
 import HeroOverviewSection from './storytelling/HeroOverviewSection.jsx';
-import HowItWorksFlowchart from './storytelling/HowItWorksFlowchart.jsx';
-import MasterReconciliationFlow from './storytelling/MasterReconciliationFlow.jsx';
-import MatchingEngineSection from './storytelling/MatchingEngineSection.jsx';
-import MultiPassTimeline from './storytelling/MultiPassTimeline.jsx';
-import DataTransformationSection from './storytelling/DataTransformationSection.jsx';
+import HowItWorksSection from './storytelling/HowItWorksSection.jsx';
 import ReconciliationResultsSection from './storytelling/ReconciliationResultsSection.jsx';
-import SystemArchitectureDiagram from './storytelling/SystemArchitectureDiagram.jsx';
-import TechnicalValidationSection from './storytelling/TechnicalValidationSection.jsx';
-import SystemOverviewMapSection from './storytelling/SystemOverviewMapSection.jsx';
+import UnderTheHoodSection from './storytelling/UnderTheHoodSection.jsx';
 import BusinessImpactPanel from './BusinessImpactPanel.jsx';
 
 export default function HomeLandingView({
@@ -35,7 +29,7 @@ export default function HomeLandingView({
       {/* Sticky Quick Section Navigation */}
       <SectionNav />
 
-      {/* 01 — Overview & Real System Status Strip */}
+      {/* 01 — Overview (Hero & Business Impact Summary) */}
       <HeroOverviewSection
         activeRun={activeRun}
         isConnected={isConnected}
@@ -44,25 +38,13 @@ export default function HomeLandingView({
         onRunCreated={onRunCreated}
       />
 
-      {/* Financial Controller Business Impact & Tax Summary */}
+      {/* Business Impact & Tax Summary */}
       <BusinessImpactPanel run={activeRun} />
 
-      {/* 02 — How ReconcileAI Works (Visual Pipeline Intro) */}
-      <HowItWorksFlowchart />
+      {/* 02 — How It Works (3-Level Settlement Pipeline & Tax Calculator) */}
+      <HowItWorksSection />
 
-      {/* 03 — Master Reconciliation Flow (Large Interactive Centerpiece Flowchart) */}
-      <MasterReconciliationFlow />
-
-      {/* 04 — Matching Engine (L0 Nodal ⇄ L1 Batch Integrity ⇄ L2 Order Unpacking Decision Tree) */}
-      <MatchingEngineSection />
-
-      {/* 05 — Multi-Pass Processing (Pass 1 Exact ⇄ Pass 2 Fuzzy ⇄ Pass 3 Claude AI Timeline) */}
-      <MultiPassTimeline />
-
-      {/* 06 — Data Transformation (Real Record Lifecycle & Schemas) */}
-      <DataTransformationSection />
-
-      {/* 07 — Reconciliation Results & Live Operations Stepper */}
+      {/* 03 — Live Results (Active Telemetry & Live Stepper Workbench) */}
       <ReconciliationResultsSection
         runData={activeRun}
         liveProgress={liveProgress}
@@ -72,17 +54,8 @@ export default function HomeLandingView({
         onNavigateTab={onNavigateTab}
       />
 
-      {/* 09 — System Architecture (Interactive Full-Stack Topology) */}
-      <SystemArchitectureDiagram />
-
-      {/* 10 — System Verification (31 / 31 Tests Passed Verification Suite) */}
-      <TechnicalValidationSection />
-
-      {/* 11 — Final System Map (Executive Architecture Blueprint) */}
-      <SystemOverviewMapSection
-        onOpenUpload={onOpenUpload}
-        onNavigateTab={onNavigateTab}
-      />
+      {/* 04 — Under the Hood (Collapsible System Specs & Architecture) */}
+      <UnderTheHoodSection />
     </div>
   );
 }

@@ -51,10 +51,11 @@ Variance/exception categories (do not collapse back to a generic flat "exception
 ## 4. Screen-by-screen required behavior
 
 ### 4.1 Overview (landing page)
-- Plain-language explanation of what the product is, what problem it solves, and a 3-step "how it works" guide (this content was deliberately merged here from a separate "How it works" tab — do not re-split it into a separate nav item).
-- A "Try with sample data" primary action.
-- The numbered sub-navigation (01 Overview, 02 How It Works, 03 Master Flow, 04 Matching Engine, 05 Multi-Pass, 06 Data Transform, 07 Exception Flow, 08 Results & Ops, and further sections) — this scroll-spy navigation's active-tab highlight and the content shown below it MUST always be in sync (this was a previously fixed bug — do not reintroduce a desync between them).
-- The **Business Impact summary panel** (see 4.7) also renders here.
+- Plain-language explanation of what the product is, what problem it solves, and a 3-step "how it works" guide.
+- A "Try with benchmark data" primary action, "Reset & Cold Run" action, and "Upload CSV" action.
+- The 4-section consolidated structure (`01 Overview`, `02 How It Works`, `03 Live Results`, `04 Under the Hood`) — this scroll-spy navigation's active-tab highlight and the content shown below it MUST always be in sync.
+- The **Business Impact summary panel** (see 4.7) renders under Section 1.
+- Section 4 ("Under the Hood") is collapsed by default with a "Show technical details" toggle containing system architecture, 31/31 automated test suite status, and tech stack details.
 
 ### 4.2 Dashboard
 - Live pipeline progress across Level 0 → 1 → 2, updating in real time (via polling on Vercel, sockets locally) as a run executes — not a fake/timer-based animation independent of real backend state.

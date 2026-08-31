@@ -19,12 +19,12 @@ export default function ReconciliationResultsSection({
           <div>
             <div className="flex items-center space-x-2">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
-                07 • RECONCILIATION RESULTS
+                03 • LIVE RESULTS
               </span>
               <span className="text-xs font-mono text-gray-500">LIVE EXECUTION WORKBENCH</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mt-1">
-              Active Run Telemetry & Partitioned Results
+              Live Reconciliation Workbench & Telemetry
             </h2>
           </div>
 

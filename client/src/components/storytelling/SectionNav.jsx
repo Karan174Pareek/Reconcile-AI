@@ -16,14 +16,8 @@ import {
 const SECTIONS = [
   { id: 'overview', label: '01 Overview', icon: Layers },
   { id: 'how-it-works', label: '02 How It Works', icon: GitBranch },
-  { id: 'master-flow', label: '03 Master Flow', icon: Workflow },
-  { id: 'matching-engine', label: '04 Matching Engine', icon: GitMerge },
-  { id: 'multi-pass', label: '05 Multi-Pass', icon: Clock },
-  { id: 'data-transformation', label: '06 Data Transform', icon: Code2 },
-  { id: 'results', label: '07 Results & Ops', icon: Activity },
-  { id: 'architecture', label: '08 Architecture', icon: Cpu },
-  { id: 'verification', label: '09 Verification', icon: ShieldCheck },
-  { id: 'system-map', label: '10 System Map', icon: Map },
+  { id: 'results', label: '03 Live Results', icon: Activity },
+  { id: 'under-the-hood', label: '04 Under the Hood', icon: Cpu },
 ];
 
 const HEADER_OFFSET = 120; // Sticky top navbar + sub-nav header offset
