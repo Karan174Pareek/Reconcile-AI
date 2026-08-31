@@ -3,6 +3,7 @@ import SectionNav from './storytelling/SectionNav.jsx';
 import HeroOverviewSection from './storytelling/HeroOverviewSection.jsx';
 import HowItWorksSection from './storytelling/HowItWorksSection.jsx';
 import ReconciliationResultsSection from './storytelling/ReconciliationResultsSection.jsx';
+import DecisionEngineSection from './storytelling/DecisionEngineSection.jsx';
 import UnderTheHoodSection from './storytelling/UnderTheHoodSection.jsx';
 import BusinessImpactPanel from './BusinessImpactPanel.jsx';
 
@@ -54,7 +55,10 @@ export default function HomeLandingView({
         onNavigateTab={onNavigateTab}
       />
 
-      {/* 04 — Under the Hood (Collapsible System Specs & Architecture) */}
+      {/* 04 — Decision Engine (Multi-Pass Reconciliation & Exception Cascade) */}
+      <DecisionEngineSection />
+
+      {/* 05 — Under the Hood (Collapsible System Specs & Architecture) */}
       <UnderTheHoodSection />
     </div>
   );

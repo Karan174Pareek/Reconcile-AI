@@ -53,9 +53,9 @@ Variance/exception categories (do not collapse back to a generic flat "exception
 ### 4.1 Overview (landing page)
 - Plain-language explanation of what the product is, what problem it solves, and a 3-step "how it works" guide.
 - A "Try with benchmark data" primary action, "Reset & Cold Run" action, and "Upload CSV" action.
-- The 4-section consolidated structure (`01 Overview`, `02 How It Works`, `03 Live Results`, `04 Under the Hood`) — this scroll-spy navigation's active-tab highlight and the content shown below it MUST always be in sync.
-- The **Business Impact summary panel** (see 4.7) renders under Section 1.
-- Section 4 ("Under the Hood") is collapsed by default with a "Show technical details" toggle containing system architecture, 31/31 automated test suite status, and tech stack details.
+- The 5-section structure (`01 Overview`, `02 How It Works`, `03 Live Results`, `04 Decision Engine`, `05 Under the Hood`) — this scroll-spy navigation's active-tab highlight and the content shown below it MUST always be in sync.
+- Section 04 ("Decision Engine") presents the multi-pass escalation cascade (Pass 1 Exact → Pass 2 Controlled Fuzzy → Pass 3 Claude AI → HITL Safety Gate) and the Reconciliation Event Chain.
+- Section 05 ("Under the Hood") is collapsed by default with a "Show technical details" toggle containing data topology, system architecture, 31/31 automated test suite status, and compact tech stack details.
 
 ### 4.2 Dashboard
 - Live pipeline progress across Level 0 → 1 → 2, updating in real time (via polling on Vercel, sockets locally) as a run executes — not a fake/timer-based animation independent of real backend state.

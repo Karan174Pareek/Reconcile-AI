@@ -17,7 +17,8 @@ const SECTIONS = [
   { id: 'overview', label: '01 Overview', icon: Layers },
   { id: 'how-it-works', label: '02 How It Works', icon: GitBranch },
   { id: 'results', label: '03 Live Results', icon: Activity },
-  { id: 'under-the-hood', label: '04 Under the Hood', icon: Cpu },
+  { id: 'decision-engine', label: '04 Decision Engine', icon: GitMerge },
+  { id: 'under-the-hood', label: '05 Under the Hood', icon: Cpu },
 ];
 
 const HEADER_OFFSET = 120; // Sticky top navbar + sub-nav header offset
