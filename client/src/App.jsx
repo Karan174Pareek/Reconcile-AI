@@ -81,7 +81,15 @@ export default function App() {
       refreshRun();
     } catch (err) {
       console.error('[Pipeline Execution Error]:', err);
-      alert(err.response?.data?.error?.message || 'Pipeline execution failed');
+      const serverMessage =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        (typeof err.response?.data === 'string' && err.response.data.includes('504')
+          ? 'Serverless request timed out on Vercel (10s limit). Pass 1 & 2 rules ran; please try running Pass 3 individually.'
+          : null) ||
+        err.message ||
+        'Pipeline execution failed';
+      alert(serverMessage);
     } finally {
       setIsExecutingPipeline(false);
     }
