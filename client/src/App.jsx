@@ -78,7 +78,9 @@ export default function App() {
     try {
       setIsExecutingPipeline(true);
       await axios.post(`${API_BASE}/runs/${activeRunId}/reconcile-all`);
-      refreshRun();
+      if (typeof refreshRun === 'function') {
+        refreshRun();
+      }
     } catch (err) {
       console.error('[Pipeline Execution Error]:', err);
       const serverMessage =

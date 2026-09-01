@@ -130,6 +130,7 @@ export function useRunSocket(runId) {
     loading,
     error,
     refetch: () => fetchRun(runId),
+    refreshRun: () => fetchRun(runId),
   };
 }
 
