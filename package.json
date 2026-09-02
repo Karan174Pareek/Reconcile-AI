@@ -36,6 +36,9 @@
     "uuid": "^11.0.5",
     "zod": "^3.24.1"
   },
+  "overrides": {
+    "qs": "^6.16.0"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "playwright": "^1.62.1"

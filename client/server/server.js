@@ -32,7 +32,7 @@ const io = new Server(server, {
       ) {
         return callback(null, cleanOrigin);
       }
-      return callback(null, cleanOrigin);
+      return callback(null, false);
     },
     methods: ['GET', 'POST'],
     credentials: true,
@@ -67,17 +67,19 @@ export { io };
 async function start() {
   try {
     await connectDB();
-    server.listen(PORT, () => {
-      console.log(`\n==================================================`);
-      console.log(`  ReconcileAI Server running on port ${PORT}`);
-      console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`  WebSocket Server active`);
-      console.log(`==================================================\n`);
-    });
   } catch (error) {
-    console.error('[Server Startup Error]:', error);
-    process.exit(1);
+    // The HTTP API has an in-memory fallback for local demos and serverless
+    // cold starts, so a missing/unavailable MongoDB must not prevent startup.
+    console.warn('[Server Startup Warning]: MongoDB unavailable; using memory fallback:', error.message);
   }
+
+  server.listen(PORT, () => {
+    console.log(`\n==================================================`);
+    console.log(`  ReconcileAI Server running on port ${PORT}`);
+    console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`  WebSocket Server active`);
+    console.log(`==================================================\n`);
+  });
 }
 
 start();

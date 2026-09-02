@@ -116,18 +116,13 @@ export async function approveDraftAction(req, res, next) {
     }
 
     if (!draft) {
-      draft = {
-        _id: id,
-        id,
-        run_id: id.startsWith('draft_') ? id.split('_').slice(1, -1).join('_') : 'RUN-DEFAULT',
-        action_type: 'ledger_journal_entry',
-        status: 'pending_approval',
-        draft_content: {
-          subject: 'Adjustment Entry',
-          body: 'Remediation adjustment entry',
+      return res.status(404).json({
+        error: {
+          code: 'DRAFT_ACTION_NOT_FOUND',
+          message: `Draft action "${id}" not found.`,
+          details: null,
         },
-        created_at: new Date().toISOString(),
-      };
+      });
     }
 
     // Idempotency check
@@ -269,18 +264,13 @@ export async function rejectDraftAction(req, res, next) {
     }
 
     if (!draft) {
-      draft = {
-        _id: id,
-        id,
-        run_id: id.startsWith('draft_') ? id.split('_').slice(1, -1).join('_') : 'RUN-DEFAULT',
-        action_type: 'ledger_journal_entry',
-        status: 'pending_approval',
-        draft_content: {
-          subject: 'Adjustment Entry',
-          body: 'Remediation adjustment entry',
+      return res.status(404).json({
+        error: {
+          code: 'DRAFT_ACTION_NOT_FOUND',
+          message: `Draft action "${id}" not found.`,
+          details: null,
         },
-        created_at: new Date().toISOString(),
-      };
+      });
     }
 
     // Idempotency check

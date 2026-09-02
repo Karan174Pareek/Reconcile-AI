@@ -155,10 +155,12 @@ export async function resolveException(req, res, next) {
     }
 
     if (!exception) {
-      return res.status(200).json({
-        success: true,
-        message: `Exception "${id}" updated to ${decision}.`,
-        data: { id, human_decision: decision },
+      return res.status(404).json({
+        error: {
+          code: 'EXCEPTION_NOT_FOUND',
+          message: `Exception "${id}" not found.`,
+          details: null,
+        },
       });
     }
 

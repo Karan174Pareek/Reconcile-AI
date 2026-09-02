@@ -125,3 +125,31 @@ test('Edge Case 4: Duplicate / replayed webhook-style record deduplication', () 
   assert.equal(result.matches.length, 1);
   assert.equal(result.matches[0].ledger_record_id, 'LED-DUP-01');
 });
+
+test('Edge Case 5: Integrity gate blocks every line item when all batches are imbalanced', () => {
+  const settlementReports = [
+    { settlement_id: 'setl_BAD', amount: 1000, utr: 'UTR-BAD', settled_at: '2026-08-01' },
+  ];
+  const lineItems = [
+    {
+      settlement_id: 'setl_BAD',
+      payment_id: 'pay_BAD',
+      order_id: 'order_BAD',
+      type: 'payment',
+      amount: 1000,
+      fee: 20,
+      tax: 3.6,
+      net_amount: 976.4,
+    },
+  ];
+  const ledgerRecords = [{ id: 'LED-BAD', order_id: 'order_BAD', amount: 1000 }];
+  const level1 = reconcileLevel1(settlementReports, lineItems, { runId: 'RUN-EDGE-GATE' });
+  assert.equal(level1.imbalancedSettlementIds.has('setl_BAD'), true);
+
+  const level2 = reconcileLevel2(lineItems, ledgerRecords, level1.balancedSettlementIds, {
+    runId: 'RUN-EDGE-GATE',
+    enforceIntegrityGate: true,
+  });
+  assert.equal(level2.matches.length, 0);
+  assert.equal(level2.exceptions.length, 0);
+});

@@ -13,7 +13,7 @@ export async function register(req, res, next) {
   try {
     const { email, password, role = 'analyst' } = req.body;
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
       return res.status(400).json({
         error: {
           code: 'VALIDATION_ERROR',
@@ -33,7 +33,7 @@ export async function register(req, res, next) {
       });
     }
 
-    const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
     let existingUser = null;
 
     if (mongoose.connection.readyState === 1) {
@@ -58,7 +58,9 @@ export async function register(req, res, next) {
       });
     }
 
-    const assignedRole = role === 'admin' ? 'admin' : 'analyst';
+    // Public registration must never grant elevated privileges. Admins must
+    // be provisioned through a trusted administrative path.
+    const assignedRole = 'analyst';
     let user = null;
 
     if (mongoose.connection.readyState === 1) {
@@ -113,7 +115,7 @@ export async function login(req, res, next) {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
       return res.status(400).json({
         error: {
           code: 'VALIDATION_ERROR',
@@ -123,7 +125,7 @@ export async function login(req, res, next) {
       });
     }
 
-    const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
     let user = null;
 
     if (mongoose.connection.readyState === 1) {

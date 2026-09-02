@@ -310,7 +310,7 @@ export function reconcileLevel2(settlementLineItems = [], ledgerRecords = [], ba
   for (const item of settlementLineItems) {
     const sId = item.settlement_id;
     // If batch was imbalanced in Level 1, skip Level 2 unpacking
-    if (balancedSettlementIds.size > 0 && !balancedSettlementIds.has(sId)) {
+    if (options.enforceIntegrityGate && !balancedSettlementIds.has(sId)) {
       continue;
     }
 
@@ -319,7 +319,9 @@ export function reconcileLevel2(settlementLineItems = [], ledgerRecords = [], ba
     const itemAmount = Number(item.amount) || 0; // Gross
     const itemFee = Number(item.fee) || 0; // MDR
     const itemTax = Number(item.tax) || 0; // 18% GST
-    const itemNet = Number(item.net_amount) || (itemAmount - itemFee - itemTax);
+    const itemNet = item.net_amount !== undefined && item.net_amount !== null
+      ? Number(item.net_amount)
+      : (itemAmount - itemFee - itemTax);
     const itemType = item.type || 'payment';
 
     // 1. Check exact order_id match
@@ -450,10 +452,13 @@ export function reconcileRecords(rawBankRecords = [], rawLedgerRecords = [], opt
   const settlementLineItems = options.settlementLineItems || [];
 
   // If settlement data provided, run full 3-Level Razorpay Pipeline
-  if (settlementReports.length > 0 && settlementLineItems.length > 0) {
+  if (settlementReports.length > 0) {
     const l0 = reconcileLevel0(rawBankRecords, settlementReports, options);
     const l1 = reconcileLevel1(settlementReports, settlementLineItems, options);
-    const l2 = reconcileLevel2(settlementLineItems, rawLedgerRecords, l1.balancedSettlementIds, options);
+    const l2 = reconcileLevel2(settlementLineItems, rawLedgerRecords, l1.balancedSettlementIds, {
+      ...options,
+      enforceIntegrityGate: true,
+    });
 
     const allMatches = [...l0.matches, ...l1.matches, ...l2.matches];
     const allExceptions = [...l0.exceptions, ...l1.exceptions, ...l2.exceptions];
@@ -727,7 +732,11 @@ export async function executeRun(runId, options = {}) {
       percentage: 45,
       message: `Level 1: ${l1.matches.length} batches balanced, ${flaggedCount} flagged. Level 2 — unpacking ${settlementLineItems.length} orders (isolating 2% MDR + 18% GST)...`,
     });
-    const l2 = reconcileLevel2(settlementLineItems, ledgerRecords, l1.balancedSettlementIds, { runId, ...options });
+    const l2 = reconcileLevel2(settlementLineItems, ledgerRecords, l1.balancedSettlementIds, {
+      runId,
+      ...options,
+      enforceIntegrityGate: true,
+    });
 
     const allMatches = [...l0.matches, ...l1.matches, ...l2.matches];
     const allExceptions = [...l0.exceptions, ...l1.exceptions, ...l2.exceptions];
@@ -792,7 +801,12 @@ export async function executeRun(runId, options = {}) {
 
     // Calculate Business Impact Figures across matched unpacked line items
     const totalGstItc = settlementLineItems.reduce((sum, item) => sum + (Number(item.tax) || 0), 0);
-    const totalSettlementVal = settlementLineItems.reduce((sum, item) => sum + (Number(item.net_amount) || Number(item.amount) || 0), 0);
+    const totalSettlementVal = settlementLineItems.reduce((sum, item) => {
+      const value = item.net_amount !== undefined && item.net_amount !== null
+        ? Number(item.net_amount)
+        : Number(item.amount);
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
     const estimatedManualHours = Math.round(((totalRecords * 2) / 60) * 10) / 10;
 
     // Headline metrics use the line-item universe so that
@@ -906,4 +920,3 @@ export async function executeRun(runId, options = {}) {
     exceptions: res.exceptions,
   };
 }
-

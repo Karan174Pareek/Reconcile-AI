@@ -96,11 +96,12 @@ export async function postAuditLog(req, res, next) {
     const { run_id } = req.params;
     const { actor, action, target_type, target_id, details } = req.body;
 
-    if (!actor || !action || !target_type || !target_id) {
+    const allowedTargetTypes = new Set(['match', 'exception', 'draft_action', 'agent_query', 'settlement']);
+    if (!actor || !action || !target_type || !target_id || !allowedTargetTypes.has(target_type)) {
       return res.status(400).json({
         error: {
           code: 'INVALID_AUDIT_PAYLOAD',
-          message: 'Audit event payload missing mandatory fields: actor, action, target_type, and target_id are required.',
+          message: 'Audit event requires actor, action, a valid target_type, and target_id.',
         },
       });
     }
@@ -125,7 +126,9 @@ export async function postAuditLog(req, res, next) {
       }
     }
 
-    MemoryStore.saveAuditLogs(run_id, [event]);
+    const logs = MemoryStore.getAuditLogs(run_id);
+    logs.unshift(event);
+    MemoryStore.saveAuditLogs(run_id, logs);
 
     return res.status(201).json({
       success: true,

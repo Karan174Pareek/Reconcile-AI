@@ -26,17 +26,19 @@ const corsOriginHandler = (origin, callback) => {
   ) {
     return callback(null, cleanOrigin);
   }
-  return callback(null, cleanOrigin);
+  return callback(null, false);
+};
+
+const corsOptions = {
+  origin: corsOriginHandler,
+  credentials: true,
 };
 
 // Middleware
 app.use(
-  cors({
-    origin: corsOriginHandler,
-    credentials: true,
-  })
+  cors(corsOptions)
 );
-app.options('*', cors());
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

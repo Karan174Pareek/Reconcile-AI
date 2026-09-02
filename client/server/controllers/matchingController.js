@@ -56,13 +56,16 @@ export async function reconcileAllHandler(req, res, next) {
     // Step 1: Execute Pass 1 and Pass 2 deterministic rules
     const p12Result = await executeRun(run_id);
 
-    // Step 2: Execute Pass 3 Claude reasoning for remaining exceptions
+    // Step 2: Execute Pass 3 Claude reasoning for remaining exceptions (bounded by 7s timeout for Vercel serverless safety)
     let p3Result = null;
     let p3Error = null;
 
     try {
       const { executePass3 } = await import('../services/claudeOrchestrator.js');
-      p3Result = await executePass3(run_id);
+      const pass3TimeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Pass 3 AI execution timed out (serverless limit safeguard)')), 7000)
+      );
+      p3Result = await Promise.race([executePass3(run_id), pass3TimeoutPromise]);
     } catch (err) {
       p3Error = err.message;
       console.warn(`[Pass 3 Warning for run ${run_id}]:`, err.message);
