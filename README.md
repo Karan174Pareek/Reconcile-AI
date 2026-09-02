@@ -1,149 +1,194 @@
 # ReconcileAI
 
-**An intelligent settlement reconciliation system that automatically unpacks lumped payment-gateway payouts back down to the order level — flagging what it can't resolve instead of guessing, and producing books-ready output instead of just a report.**
+Settlement reconciliation for Razorpay-style payout data: unpack bulk bank credits into order-level matches, fees, GST, refunds, and reviewable exceptions.
 
-Built for the Razorpay AI Buildathon 2026 (AI Finance Controller track).
+## Overview
 
-**Live:** https://reconcile-ai-server.vercel.app/
+Payment gateways commonly settle many orders as one bank credit. That makes it difficult for finance teams to connect bank activity to internal orders, explain MDR/GST deductions, and identify refunds or missing records.
 
----
+ReconcileAI ingests bank statements, Razorpay settlement reports, settlement line items, and internal ledger data. Its three-level pipeline correlates the batch, verifies settlement arithmetic, and matches each order line to the ledger. Unresolved cases are categorized for human review and can be analyzed through a grounded AI assistant.
 
-## The Problem
+The project is useful for finance operations, controllers, and developers evaluating automated reconciliation workflows for payment-gateway settlements.
 
-When a payment gateway like Razorpay settles funds to a merchant's bank account, it doesn't send one credit per order. It batches hundreds of individual payments into a single lumped NEFT/RTGS credit — typically on a T+2 cycle — net of:
+## Key Features
 
-- MDR (Merchant Discount Rate) fees, roughly 2% per transaction
-- 18% GST charged on top of that MDR fee
-- Any refunds processed within that settlement cycle
-
-The bank statement shows exactly **one row**. But that row actually represents hundreds of individual customer orders, each with its own gross amount, its own fee deduction, its own tax, and possibly its own refund adjustment. Without unpacking this batch back down to the order level, a business cannot post revenue and expense entries to the correct accounts, and cannot correctly claim GST Input Tax Credit (ITC) on the fees it paid.
-
-This is the real reconciliation problem merchants using any payment gateway deal with — not a simplified "match list A against list B" exercise.
-
-## The Solution — A 3-Level Unpacking Pipeline
-
-1. **Level 0 — Bank Deposit Matching**: matches the single bulk bank credit to a settlement batch header, using UTR and net amount checksums.
-2. **Level 1 — Batch Integrity Check**: verifies the arithmetic of every settlement batch — `sum(gross − fee − tax − refunds) = net bank credit`, within ₹0.05 tolerance. An imbalanced batch is quarantined and flagged immediately rather than unpacked further, because unpacking numbers that don't already add up would just propagate an error.
-3. **Level 2 — Order Unpacking & Tax Breakdown**: matches each individual line item back to the internal ledger order, isolating the MDR fee, the GST on that fee, refund deductions, rounding differences, and partial settlements — each categorized specifically, not lumped into one generic "exception."
-
-Whatever can't be confidently resolved by deterministic + fuzzy matching gets reasoned through individually by Claude, which explains *why* — duplicate, refund, bank fee, timing lag, unrecorded, or genuinely unknown — rather than just marking it red.
+- Three-level reconciliation: bank credit to settlement, batch integrity, and order-level unpacking.
+- Exact and controlled fuzzy matching with UTR, amount, date, and reference checks.
+- Explicit variance categories for MDR, GST on MDR, refunds, rounding, partial settlements, unrecorded orders, and unknown cases.
+- Claude-powered Pass 3 reasoning with Gemini and deterministic heuristic fallbacks, labeled by engine.
+- Human-in-the-loop exception resolution and idempotent draft-action approval/rejection.
+- Append-only audit logging and read-only, run-scoped agent tools.
+- CSV journal and reconciliation-certificate exports, plus live progress through Socket.io locally and polling on Vercel.
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    U[Finance User] --> FE[React + Vite Frontend]
+
+    B[Bank Statement CSV] --> ING[Express Ingestion API]
+    R[Razorpay Settlement CSV] --> ING
+    L[Internal Ledger CSV] --> ING
+
+    FE -->|REST / SSE| API[Express API]
+    FE -->|Socket.io locally<br/>Polling on Vercel| API
+    ING --> VAL[Multer + PapaParse + Zod]
+    VAL --> ENG[3-Level Matching Engine]
+    API --> ENG
+    ENG --> DB[(MongoDB via Mongoose)]
+    API --> MEM[In-Memory Fallback]
+    ENG --> AI[Claude Pass 3]
+    AI -->|Fallback| GEM[Google Gemini]
+    GEM -->|Fallback| HEU[Heuristic Reasoner]
+    API --> HITL[Exception Queue + Draft Actions + Audit Log]
+    HITL --> DB
 ```
-┌─────────────────┐     ┌──────────────────────┐     ┌──────────────────┐
-│  React Frontend  │ <-> │  Express/Node Backend │ <-> │  MongoDB Atlas    │
-│  Vite + Tailwind │     │  - Matching Engine     │     │  - bank_records   │
-│  - Dashboard     │     │  - Claude Orchestrator │     │  - settlement_*   │
-│  - Exceptions    │     │  - Agent Tool Router   │     │  - ledger_records │
-│  - Draft Actions │     │  - Auth + Audit hooks  │     │  - matches         │
-│  - Audit Trail   │     └───────────┬────────────┘     │  - exceptions      │
-│  - Ask AI drawer │                 │                  │  - draft_actions   │
-└─────────────────┘                 ▼                  │  - audit_log       │
-                            ┌──────────────────┐        └──────────────────┘
-                            │   Claude API      │
-                            │  - Level 2 reasoning│
-                            │  - Ask AI tool-use  │
-                            │  - Draft-action gen │
-                            └──────────────────┘
-```
 
-**Request flow — a reconciliation run:**
+- **Frontend:** dashboard, exception queue, settlement worksheet, draft-action queue, audit trail, and Ask AI drawer.
+- **Ingestion API:** accepts CSV uploads in memory and validates rows before persistence.
+- **Matching engine:** runs Level 0, Level 1, and Level 2 reconciliation with bounded processing.
+- **AI services:** reason over unresolved settlement cases and fall back when a provider is unavailable.
+- **MongoDB / memory fallback:** stores runs, records, matches, exceptions, draft actions, and audit events.
+- **Vercel entrypoints:** serve the React build and expose the Express app as a serverless API.
 
-1. Bank statement + settlement report + ledger data are ingested (upload or synthetic seed).
-2. **Level 0** matches the single bank credit to its settlement batch (UTR + net amount + date).
-3. **Level 1** verifies the batch's own arithmetic balances within ₹0.05 — an imbalanced batch is flagged immediately, not unpacked further.
-4. **Level 2** unpacks the batch into individual order-level line items, using deterministic exact-matching first, then fuzzy matching, then — only for what's still unresolved — Claude reasoning, to keep AI cost and latency bounded.
-5. Every match and exception is written to MongoDB with a full audit trail entry.
-6. The frontend reflects progress in real time — Socket.io locally, polling in production, since Vercel's serverless functions don't support long-lived WebSocket connections.
+## Razorpay Integration
 
-**Request flow — Ask AI:**
+This submission uses Razorpay settlement concepts and data structures, but does **not** make live Razorpay API calls.
 
-A question comes in → Claude is given read-only tool access to query matches, exceptions, the audit log, and individual records, scoped to the current run → it answers using only what those tools return, citing real record IDs → every tool call is itself logged to the audit trail.
-
-**Request flow — Draft actions:**
-
-Claude proposes a next action (e.g. a vendor follow-up email) for a resolvable exception → it's written as `pending_approval`, no side effect yet → a human reviews, optionally edits, and approves → only then does the action execute, and it's recorded as idempotent (a duplicate approval click is a no-op, not a duplicate action).
-
-**Deployment notes:** Running on Vercel required adapting away from a few defaults a traditional always-on Express server would use — a serverless-safe cached MongoDB connection instead of a fresh connection per request, polling instead of relying on Socket.io, and bounded-concurrency batching for Claude API calls to stay within serverless execution time limits.
-
-Full details — including the exact database schema, API contracts, and Claude prompt contracts — are in [`/docs`](./docs) and [`MASTER_SPEC.md`](./MASTER_SPEC.md).
-
-## Verified Results
-
-From a real run on a synthetic 520-record dataset (all numbers below are from an actual execution, not estimates):
-
-| Metric | Result |
-|---|---|
-| Total records processed | 520 |
-| Level 0 — bank↔settlement matches | 16 / 17 batches |
-| Level 1 — batches passing integrity check | 15 / 16 |
-| Automatically matched (deterministic) | 462 |
-| Resolved via AI reasoning | 33 |
-| Flagged for human review | 25 |
-| **Overall resolution rate** | **95.19%** |
-| GST Input Tax Credit identified | ₹35,234.59 |
-| Total settlement volume processed | ₹90,75,267.03 |
-
-The 25 flagged cases are intentional, not hidden — a reconciliation tool claiming 100% accuracy on real-world settlement data would be a red flag, not an achievement. Those are exactly the cases that should reach a human.
-
-## Beyond Flagging — Books-Ready Output
-
-Most reconciliation demos stop at "here's a dashboard with a match rate." ReconcileAI goes further:
-
-- **Business Impact panel** — translates the technical numbers into what a finance controller actually cares about: claimable GST ITC in rupees, estimated hours saved vs. manual review (with the assumption stated explicitly, never overstated as measured fact), and total settlement volume processed.
-- **Exportable Reconciliation Journal (CSV)** — one row per resolved line item with the exact columns an accountant needs to post entries: date, order ID, settlement ID, gross amount, MDR fee, GST on MDR, net settled, account category, variance category, resolution status.
-- **Reconciliation Certificate** — a downloadable summary suitable for a monthly close or an audit request: run totals, match rate, GST ITC identified, and every unresolved exception with its category.
-
-## Conversational Forensic Assistant
-
-An "Ask AI" panel, accessible from every screen, lets you query the current run in plain language — grounded in the actual database via read-only tool calls, not a hallucinated answer:
-
-- Suggested questions are generated from the *actual* current run (e.g. a real imbalanced batch ID if one exists), not hardcoded examples.
-- When the answer references a specific record, that reference is clickable and jumps you straight to it in the Exception Queue or Settlement Worksheet.
-- The conversation retains context across follow-up questions within a session.
-- **3-Tier Multi-Provider AI Resilience Architecture**: The system executes a primary Claude 3.5 Sonnet pipeline (`ai_mode: "claude"`), automatically failing over to Google Gemini Flash (`ai_mode: "gemini"`) if Claude is unconfigured or encounters quota/credit limits, and finally falling back to a deterministic forensic engine (`ai_mode: "heuristic"`).
-- **Honest Provider Labeling**: The UI, audit logs, and exports explicitly record which engine produced each result (`"claude"`, `"gemini"`, or `"heuristic"`) — ensuring complete transparency and uptime for live production demos regardless of individual provider availability.
-
-## Human-in-the-Loop, Always
-
-The system can draft next actions for resolvable exceptions — a vendor follow-up email, a ledger correction entry — but never executes anything automatically. Every draft requires explicit human review and approval before any real effect happens, and approving is idempotent (clicking Approve twice never creates a duplicate action).
-
-## Full Audit Trail
-
-Every match, exception, and approval is logged to an append-only audit trail — enforced at the schema level, not just by convention. Nothing in this system can quietly rewrite its own history.
+- **Input represented:** settlement reports contain `settlement_id`, UTR, net amount, gross amount, fees, tax, refunds, and settlement date. Line items contain payment/order references and net settlement values.
+- **Current source:** uploaded CSV files and the built-in synthetic benchmark generator in `server/scripts/generateSeed.js`.
+- **Reconciliation:** Level 0 links a bank credit to a settlement batch using UTR, amount, and date proximity. Level 1 checks that line-item net amounts balance the stated settlement. Level 2 maps line items to internal ledger orders and separates MDR, GST, refunds, and other variances.
+- **Not implemented:** Razorpay Checkout, live Orders/Payments/Settlements API calls, webhook ingestion, webhook signature verification, and payment capture/refund flows.
+- **Security boundary:** no Razorpay credentials are required for the current CSV-based flow. AI and database credentials remain server-side and are configured through environment variables.
 
 ## Tech Stack
 
-- **Frontend:** React, Vite, Tailwind CSS
-- **Backend:** Node.js, Express, MongoDB (Atlas), serverless-safe connection caching
-- **Real-time:** Socket.io locally, polling in production (Vercel's serverless model doesn't support long-lived WebSocket connections)
-- **AI reasoning:** 3-Tier Multi-Provider Architecture (Claude 3.5 Sonnet primary ➔ Google Gemini 3.5 Flash Lite secondary ➔ Deterministic Forensic Engine final fallback) — used specifically for the minority of cases simple rule-based matching can't confidently resolve, with honest engine labeling across UI, logs, and database records.
-- **Deployment:** Vercel
+| Layer | Technology |
+| --- | --- |
+| Frontend | React 18, Vite, Tailwind CSS, Framer Motion |
+| Backend | Node.js 18+, Express |
+| Database | MongoDB, Mongoose; in-memory fallback for demos/serverless cold starts |
+| Payments | Razorpay settlement data model and CSV fixtures; no live API integration |
+| AI reasoning | Anthropic Claude SDK, Google Gemini REST fallback, deterministic heuristic engine |
+| Authentication | JWT, bcryptjs |
+| Validation and ingestion | Multer, PapaParse, Zod |
+| Realtime | Socket.io locally; REST polling on Vercel |
+| Deployment | Vercel |
+
+## Project Structure
+
+```text
+Reconcile-AI/
+├── client/
+│   ├── src/                 React application and UI components
+│   ├── api/                 Vercel serverless API entrypoint
+│   └── server/              Synced backend copy used by the client deployment
+├── server/
+│   ├── app.js               Express application
+│   ├── server.js            Local HTTP + Socket.io server
+│   ├── controllers/         Ingestion, matching, chat, exceptions, exports
+│   ├── services/            Matching engine, AI orchestration, memory store
+│   ├── models/              Mongoose schemas
+│   ├── routes/              REST route definitions
+│   ├── scripts/             Seed generation and benchmark utilities
+│   ├── data/                CSV fixtures and generated settlement data
+│   └── tests/               Node test suite
+├── api/                     Root Vercel API entrypoints
+├── docs/                    Architecture, API, database, and security notes
+├── scripts/syncServer.js    Keeps client/server synchronized with server/
+├── package.json
+└── README.md
+```
 
 ## Getting Started
 
+### Prerequisites
+
+- Node.js 18 or newer
+- npm
+- MongoDB, optional for local demo mode and required for durable persistence
+- Anthropic and/or Gemini API keys, optional; the heuristic fallback runs without them
+
+### Installation
+
 ```bash
-git clone https://github.com/Karan174Pareek/Reconcile-AI.git
+git clone <repository-url>
 cd Reconcile-AI
-cp server/.env.example server/.env   # add your Claude API key and MongoDB URI
-npm install --prefix server
-npm install --prefix client
-npm run seed --prefix server
-npm run dev --prefix server
-npm run dev --prefix client
+npm install
 ```
 
-## Documentation
+### Environment Variables
 
-Full design docs are in [`/docs`](./docs) and [`MASTER_SPEC.md`](./MASTER_SPEC.md) — product requirements, architecture, database schema, API contracts, Claude prompt contracts, security considerations, and error-handling strategy.
+Create `server/.env` from `server/.env.example`:
 
-## Known Limitations (stated plainly, not hidden)
+```env
+PORT=5000
+NODE_ENV=development
+CLIENT_URL=http://localhost:5173
 
-- Demo-scoped: no production-grade encryption-at-rest configuration or rate limiting beyond what MongoDB Atlas and Vercel provide by default.
-- Synthetic settlement data only — no live payment gateway integration in this submission.
-- Estimated time-savings figures are explicitly labeled assumptions, not measured facts.
+# Optional for durable persistence; omit to use the in-memory fallback
+MONGO_URI=mongodb://localhost:27017/reconcile_ai
 
-## About
+# Optional AI providers
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash-lite
 
-Built by **Karan** — 4th-year BCA student at MAKAUT, co-founder of Ignitia Digital. This project reflects how I approach engineering problems: understand the real workflow before writing code, design for the failure cases before the happy path, and build systems that are honest about what they couldn't resolve rather than ones that look flawless on the surface.
+# Set a strong value outside local development
+JWT_SECRET=
+```
+
+`CLAUDE_API_KEY` and `CLAUDE_MODEL` are also accepted aliases for the Anthropic settings.
+
+### Run Locally
+
+Start the backend and frontend together:
+
+```bash
+npm run dev
+```
+
+Or run them separately:
+
+```bash
+npm run dev:server
+npm run dev:client
+```
+
+The frontend runs at `http://localhost:5173` and the API at `http://localhost:5000`.
+
+To seed MongoDB and write benchmark CSV fixtures (`MONGO_URI` required):
+
+```bash
+npm run seed:csv
+```
+
+The application can also generate benchmark data from the Overview screen or via `POST /api/runs/generate-seed`.
+
+## Payment Flow
+
+There is no live payment or checkout flow in this version. The implemented reconciliation flow is:
+
+1. Upload bank, Razorpay settlement, and ledger CSV data, or generate the synthetic benchmark dataset.
+2. Validate rows and store the run data.
+3. Correlate bank credits with settlement batches using UTR, amount, and date.
+4. Block imbalanced batches at the integrity gate.
+5. Unpack balanced batches into order-level matches and calculate MDR, GST, refunds, and variances.
+6. Escalate unresolved records to Claude, Gemini, or the heuristic reasoner.
+7. Present exceptions and draft actions for human review, with audit events for decisions.
+
+## Security
+
+- CSV uploads are restricted to CSV files, held in memory, size-limited, and validated with Zod.
+- JWT authentication and bcrypt password hashing are implemented for the auth flow.
+- AI keys, database URIs, and signing secrets are read from server-side environment variables.
+- Agent tools are read-only and scope database queries to the active `run_id`.
+- AuditLog mutation and deletion operations are rejected by Mongoose middleware.
+- Draft actions require explicit human approval and approval/rejection is idempotent.
+
+## Demo
+
+- Live demo: [reconcile-ai-server.vercel.app](https://reconcile-ai-server.vercel.app/)
+- No demo credentials or video link are included in the repository.
+- Use the built-in benchmark generator to evaluate the end-to-end workflow without external payment credentials.
