@@ -6,7 +6,7 @@ Settlement reconciliation for Razorpay-style payout data: unpack bulk bank credi
 
 Payment gateways commonly settle many orders as one bank credit. That makes it difficult for finance teams to connect bank activity to internal orders, explain MDR/GST deductions, and identify refunds or missing records.
 
-ReconcileAI ingests bank statements, Razorpay settlement reports, settlement line items, and internal ledger data. Its three-level pipeline correlates the batch, verifies settlement arithmetic, and matches each order line to the ledger. Unresolved cases are categorized for human review and can be analyzed through a grounded AI assistant.
+ReconcileAI accepts bank and internal-ledger CSVs for two-way reconciliation, and includes a benchmark generator that supplies Razorpay-style settlement reports and line items for the full three-level pipeline. Unresolved cases are categorized for human review and can be analyzed through a grounded AI assistant.
 
 The project is useful for finance operations, controllers, and developers evaluating automated reconciliation workflows for payment-gateway settlements.
 
@@ -27,7 +27,6 @@ flowchart LR
     U[Finance User] --> FE[React + Vite Frontend]
 
     B[Bank Statement CSV] --> ING[Express Ingestion API]
-    R[Razorpay Settlement CSV] --> ING
     L[Internal Ledger CSV] --> ING
 
     FE -->|REST / SSE| API[Express API]
@@ -170,7 +169,7 @@ The application can also generate benchmark data from the Overview screen or via
 
 There is no live payment or checkout flow in this version. The implemented reconciliation flow is:
 
-1. Upload bank, Razorpay settlement, and ledger CSV data, or generate the synthetic benchmark dataset.
+1. Upload bank and ledger CSV data, or generate the synthetic benchmark dataset (which includes Razorpay-style settlement data).
 2. Validate rows and store the run data.
 3. Correlate bank credits with settlement batches using UTR, amount, and date.
 4. Block imbalanced batches at the integrity gate.

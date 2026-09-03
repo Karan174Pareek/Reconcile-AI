@@ -13,33 +13,33 @@ import {
 const TEST_CATEGORIES = [
   {
     title: 'INGESTION & ZOD SCHEMAS',
-    tests: '5 Tests Passed',
+    tests: 'Covered by automated tests',
     desc: 'Validates line-by-line row errors, strict date/amount coercions, and CSV stream limits.',
     badge: '100% COVERAGE',
   },
   {
     title: '3-TIER MULTI-LEVEL LOGIC',
-    tests: '8 Tests Passed',
+    tests: 'Covered by automated tests',
     desc: 'Verifies Level 0 UTR matching, Level 1 batch balance equations, and Level 2 18% GST ITC isolation.',
     badge: 'DETERMINISTIC',
   },
   {
     title: 'FUZZY & EXACT HEURISTICS',
-    tests: '7 Tests Passed',
+    tests: 'Covered by automated tests',
     desc: 'Tests Levenshtein distance, 3-gram text similarity, amount tolerances, and date lag windows.',
     badge: 'ZERO TOLERANCE',
   },
   {
     title: 'CLAUDE AI & HITL REMEDIATION',
-    tests: '6 Tests Passed',
+    tests: 'Covered by automated tests',
     desc: 'Validates Anthropic tool schemas, corrective prompt retries, and vendor email structures.',
     badge: 'AI SAFEGUARDS',
   },
   {
-    title: 'CRYPTOGRAPHIC AUDIT LOG',
-    tests: '5 Tests Passed',
-    desc: 'Tests SHA-256 hash chaining and ensures database pre-hooks strictly block updates/deletions.',
-    badge: 'TAMPER-PROOF',
+    title: 'APPEND-ONLY AUDIT LOG',
+    tests: 'Covered by automated tests',
+    desc: 'Verifies append-only audit persistence and database hooks that block updates and deletions.',
+    badge: 'MUTATION BLOCKED',
   },
 ];
 
@@ -57,13 +57,13 @@ export default function TechnicalValidationSection() {
               <span className="text-xs font-mono text-gray-500">ENGINEERING VERIFICATION REPORT</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mt-1">
-              Automated Test Suite & Cryptographic Guarantees
+              Automated Test Suite & Audit Controls
             </h2>
           </div>
 
           <div className="flex items-center space-x-2 bg-emerald-50 px-3.5 py-1.5 rounded-lg border border-emerald-200 font-mono text-xs text-emerald-800 self-start sm:self-auto font-bold">
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            <span>TEST SUITE: 31 / 31 PASSED (100%)</span>
+            <span>AUTOMATED TESTS VERIFIED</span>
           </div>
         </div>
 
@@ -93,15 +93,15 @@ export default function TechnicalValidationSection() {
           ))}
         </div>
 
-        {/* Cryptographic Defense Callout */}
+        {/* Audit Controls Callout */}
         <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200 flex items-start space-x-3 text-xs">
           <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
           <div className="space-y-0.5 text-gray-700">
             <span className="font-bold text-gray-900 block font-mono">
-              Audit Defense & Cryptographic Immutability
+              Audit Defense & Append-only Immutability
             </span>
             <p className="leading-relaxed">
-              Every reconciliation run generates an unbroken SHA-256 hash chain linking raw deposits, intermediate batch integrity checks, AI diagnoses, and human approval timestamps. Mongoose pre-save hooks strictly prevent update and delete mutations on the ledger.
+              Audit events are stored append-only, and Mongoose hooks reject update and delete mutations on audit records. This preserves an attributable event history without implying cryptographic hash chaining.
             </p>
           </div>
         </div>

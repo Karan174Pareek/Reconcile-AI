@@ -71,7 +71,7 @@ export default function ExplainerModal({ isOpen, onClose }) {
                 <span>The 90/10 Principle</span>
               </div>
               <p className="text-xs text-blue-950 leading-relaxed">
-                Manual reconciliation is slow and prone to human oversight. ReconcileAI automatically clears the straightforward <strong>90%</strong> of standard matches and isolates the complex <strong>10%</strong> (payment gateway fees, GST credits, timing lags, and refunds) into a structured queue for human review — rather than pretending everything matched.
+                Manual reconciliation is slow and prone to human oversight. ReconcileAI automatically clears deterministic matches and isolates complex variances (payment gateway fees, GST credits, timing lags, and refunds) into a structured queue for human review.
               </p>
             </div>
 

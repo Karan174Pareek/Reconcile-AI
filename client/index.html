@@ -41,13 +41,13 @@
           <li><strong>3-Tier Matching Pipeline</strong>: Level 0 Bank Credit ↔ Settlement Batch UTR tracking, Level 1 Mathematical Batch Integrity Gate, Level 2 Line-Item Unpacking.</li>
           <li><strong>Tax Credit Decomposition</strong>: Automatically isolates 2.0% MDR processing fees and claims 18% GST Input Tax Credits (ITC) on merchant fees.</li>
           <li><strong>Mathematical Integrity Gate</strong>: Enforces checksum balance (Σ line items == batch stated net payout) to block misposting before ERP ledger contamination.</li>
-          <li><strong>Governed Human-in-the-Loop (HITL) Workflow</strong>: Provides structured draft remediation actions (journal entries, vendor emails) with immutable SHA-256 audit logging.</li>
+          <li><strong>Governed Human-in-the-Loop (HITL) Workflow</strong>: Provides structured draft remediation actions (journal entries, vendor emails) with append-only audit logging.</li>
           <li><strong>Conversational Forensic Auditor</strong>: Read-only database tools powered by Claude 3.5 Sonnet for natural language querying of tax credits, payout worksheets, and exception history.</li>
         </ul>
 
         <h2>Verified Performance Metrics</h2>
         <ul>
-          <li><strong>Benchmark Match Rate</strong>: 87.52% clean autonomous match rate across 505 transactions and 16 settlement batches.</li>
+          <li><strong>Benchmark Dataset</strong>: Built-in Razorpay-style settlement data for evaluating the three-level reconciliation workflow.</li>
           <li><strong>Held-Out Validation Match Rate</strong>: 86.13% match rate on unseen edge-case validation dataset (`npm run bench`).</li>
           <li><strong>False Positive Rate (FPR)</strong>: 0.00% across all evaluated datasets.</li>
         </ul>

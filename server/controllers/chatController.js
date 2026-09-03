@@ -406,7 +406,7 @@ async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
         `| :--- | :--- | :--- | :--- | :--- |\n` +
         `${rows}\n` +
         `| **Total** | — | **₹${totalGross.toLocaleString('en-IN')}** | **₹${totalMdr.toFixed(2)}** | **₹${totalGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}** |\n\n` +
-        `**Statutory Justification:** All payment processing fees billed by Razorpay constitute eligible business inputs. The 18% GST tax component paid is recoverable against output GST liabilities upon GSTR-2B reconciliation.`,
+        `**Tax note:** Eligibility for Input Tax Credit remains subject to the merchant's tax position, valid documentation, and GSTR-2B reconciliation.`,
     });
     return;
   }
@@ -454,7 +454,7 @@ async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
     } else {
       sendEvent({
         type: 'text',
-        content: `### Settlement Batch Integrity Report\n\nAll 16 settlement batches in run **${runId}** passed Level 1 mathematical integrity checks with 0.00% variance. No imbalanced batches were detected.`,
+        content: `### Settlement Batch Integrity Report\n\n${run?.level1_balanced ?? 0} of ${(run?.level1_balanced ?? 0) + (run?.level1_flagged ?? 0)} settlement batches passed Level 1 mathematical integrity checks. No imbalanced batches were detected in the active run.`,
       });
     }
     return;
@@ -531,13 +531,16 @@ async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
       tool_use_id: 'tool_call_matches_1',
     });
 
-    const runStatus = run?.status || 'complete';
-    const totalRecs = run?.total_records || 500;
-    const pass1 = run?.pass1_matched || 0;
-    const pass2 = run?.pass2_matched || 0;
-    const pass3 = run?.pass3_matched || 0;
-    const unresolvedRecs = run?.unresolved || 0;
-    const matchRate = run?.match_rate || 0.0;
+    const runStatus = run?.status || 'unknown';
+    const totalRecs = Number.isFinite(Number(run?.total_records)) ? Number(run.total_records) : 0;
+    const pass1 = Number.isFinite(Number(run?.pass1_matched)) ? Number(run.pass1_matched) : 0;
+    const pass2 = Number.isFinite(Number(run?.pass2_matched)) ? Number(run.pass2_matched) : 0;
+    const pass3 = Number.isFinite(Number(run?.pass3_matched)) ? Number(run.pass3_matched) : 0;
+    const unresolvedRecs = Number.isFinite(Number(run?.unresolved)) ? Number(run.unresolved) : 0;
+    const matchRate = Number.isFinite(Number(run?.match_rate)) ? Number(run.match_rate) : 0;
+    const level0Matched = Number.isFinite(Number(run?.level0_matched)) ? Number(run.level0_matched) : 0;
+    const level1Balanced = Number.isFinite(Number(run?.level1_balanced)) ? Number(run.level1_balanced) : 0;
+    const level1Flagged = Number.isFinite(Number(run?.level1_flagged)) ? Number(run.level1_flagged) : 0;
 
     const matchRows = (result.matches || []).slice(0, 5).map((m) => {
       return `- **${m.bank_record_id || 'BNK'}** ↔ **${m.ledger_record_id || 'LED'}** [Level ${m.level || 2} - ${(m.method || 'exact').toUpperCase()}]: ${m.rationale || 'Matched'}`;
@@ -548,8 +551,8 @@ async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
       content: `### Reconciliation Overview for Run \`${runId}\`\n\n` +
         `- **Status:** \`${runStatus}\`\n` +
         `- **Total Records Analyzed:** **${totalRecs}**\n` +
-        `- **Level 0 (Bank-Settlement):** **${run?.level0_matched || 16}** matched\n` +
-        `- **Level 1 (Batch Integrity):** **${run?.level1_balanced || 15}** balanced, **${run?.level1_flagged || 1}** imbalanced\n` +
+        `- **Level 0 (Bank-Settlement):** **${level0Matched}** matched\n` +
+        `- **Level 1 (Batch Integrity):** **${level1Balanced}** balanced, **${level1Flagged}** imbalanced\n` +
         `- **Level 2 (Order Unpacking):** **${pass1}** exact, **${pass2}** fuzzy, **${pass3}** AI matched\n` +
         `- **Unresolved Exceptions:** **${unresolvedRecs}**\n` +
         `- **Overall Match Rate:** **${matchRate}%**\n\n` +
@@ -616,13 +619,13 @@ async function handleOfflineAgentConversation(runId, run, messages, sendEvent) {
     tool_use_id: 'tool_call_default_1',
   });
 
-  const matchRate = run?.match_rate || 87.5;
+  const matchRate = Number.isFinite(Number(run?.match_rate)) ? Number(run.match_rate) : 0;
   sendEvent({
     type: 'text',
     content: `I am operating in **Forensic Inspector Engine Mode** for run **\`${runId}\`** (Overall Match Rate: **${matchRate}%**).\n\n` +
       `You can ask specific data queries such as:\n` +
       `- *"List all unrecorded Razorpay orders settled without ledger entries"* (Queries \`query_exceptions\` for unrecorded orders)\n` +
-      `- *"What is our total claimable GST Input Tax Credit this cycle and why?"* (Calculates 18% GST ITC on MDR fees)\n` +
+      `- *"What GST on MDR was identified this cycle and why?"* (Calculates the 18% tax component on MDR fees)\n` +
       `- *"Show imbalanced settlement batches"* (Queries \`query_settlements\` for Level 1 batch imbalance flags)\n` +
       `- *"Show audit trail log timeline"* (Queries append-only \`query_audit_log\` events)`,
   });

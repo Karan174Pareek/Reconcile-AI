@@ -62,7 +62,7 @@ export default function LiveProgressStepper({
     {
       level: 'Step 3',
       title: 'Unpack Orders & Tax Credits',
-      desc: 'Matches individual order line items, isolates 2% gateway MDR fees, and computes 18% claimable GST Input Tax Credits.',
+      desc: 'Matches individual order line items, isolates 2% gateway MDR fees, and computes the 18% GST component for review.',
       icon: Sparkles,
       isDone: isLevel2Done,
       isActive: (isExecuting || status === 'running') && isLevel1Done && !isLevel2Done,

@@ -226,23 +226,33 @@ export async function resolveException(req, res, next) {
     }
 
     // Update Run summary statistics
-    if (exception.run_id && mongoose.connection.readyState === 1) {
+    if (exception.run_id) {
       try {
-        const remainingUnresolved = await Exception.countDocuments({
-          run_id: exception.run_id,
-          human_decision: 'pending',
-        });
-        const run = await Run.findOne({ run_id: exception.run_id });
+        let remainingUnresolved;
+        let run;
+        if (mongoose.connection.readyState === 1) {
+          remainingUnresolved = await Exception.countDocuments({
+            run_id: exception.run_id,
+            human_decision: 'pending',
+          });
+          run = await Run.findOne({ run_id: exception.run_id });
+        } else {
+          remainingUnresolved = MemoryStore.getExceptions(exception.run_id)
+            .filter((item) => item.human_decision === 'pending').length;
+          run = MemoryStore.getRun(exception.run_id);
+        }
         if (run) {
           run.unresolved = remainingUnresolved;
-          const total = run.total_records || 1;
+          const total = Number(run.total_records) || 0;
           const matched = Math.max(0, total - remainingUnresolved);
-          run.match_rate = Math.min(100, Math.max(0, (matched / total) * 100));
-          await run.save();
+          run.match_rate = total > 0 ? Math.min(100, Math.max(0, (matched / total) * 100)) : 0;
+          if (typeof run.save === 'function' && mongoose.connection.readyState === 1) {
+            await run.save();
+          }
           MemoryStore.saveRun(run);
         }
       } catch (e) {
-        console.warn('[Mongo Run Summary Update Warning]:', e.message);
+        console.warn('[Run Summary Update Warning]:', e.message);
       }
     }
 

@@ -32,7 +32,7 @@ export default function AgentChat({ runId, run, isOpen, onClose, onNavigateToRef
   // Derive dynamic suggested prompt chips from actual run data
   const dynamicPrompts = [
     `Why does settlement batch setl_001 have a batch imbalance?`,
-    `What is our total claimable GST Input Tax Credit (18%) for Run ${runId || 'current'}?`,
+    `What GST on MDR was identified for Run ${runId || 'current'}?`,
     `List all unrecorded Razorpay orders settled without ledger entries`,
     `Show MDR fee breakdown across unpacked settlement line items`,
   ];

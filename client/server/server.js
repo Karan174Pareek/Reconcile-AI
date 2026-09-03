@@ -16,7 +16,8 @@ function sanitizeOrigin(url) {
   return url.replace(/^['"\s]+|['"\s]+$/g, '').replace(/\/+$/, '');
 }
 
-const configuredClientUrl = sanitizeOrigin(process.env.CLIENT_URL);
+const configuredClientUrl = process.env.CLIENT_URL ? sanitizeOrigin(process.env.CLIENT_URL) : null;
+const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
 
 // Socket.io initialization
 const io = new Server(server, {
@@ -24,15 +25,17 @@ const io = new Server(server, {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       const cleanOrigin = sanitizeOrigin(origin);
-      if (
-        cleanOrigin === configuredClientUrl ||
-        cleanOrigin.endsWith('.vercel.app') ||
-        cleanOrigin.includes('localhost') ||
-        cleanOrigin.includes('127.0.0.1')
-      ) {
-        return callback(null, cleanOrigin);
+      let parsed;
+      try {
+        parsed = new URL(cleanOrigin);
+      } catch {
+        return callback(null, false);
       }
-      return callback(null, false);
+      if (!['http:', 'https:'].includes(parsed.protocol)) return callback(null, false);
+      const isConfigured = Boolean(configuredClientUrl) && cleanOrigin === configuredClientUrl;
+      const isLocalDevelopment = !isProduction &&
+        (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1');
+      return callback(null, isConfigured || isLocalDevelopment ? cleanOrigin : false);
     },
     methods: ['GET', 'POST'],
     credentials: true,

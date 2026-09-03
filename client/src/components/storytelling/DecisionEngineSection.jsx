@@ -80,7 +80,7 @@ const ESCALATION_STAGES = [
       'Auditor review workstation',
       'Editable email & entry drafts',
       'Idempotent approval execution',
-      'SHA-256 chained audit record',
+      'Append-only audit record',
     ],
   },
 ];
@@ -92,7 +92,7 @@ const EVENT_CHAIN_NODES = [
   { step: '04', title: 'VERIFY', desc: 'Batch Math Integrity' },
   { step: '05', title: 'AI DIAGNOSIS', desc: 'Claude Exception Triage' },
   { step: '06', title: 'HUMAN APPROVAL', desc: 'HITL Sign-off Desk' },
-  { step: '07', title: 'FINAL OUTCOME', desc: 'SHA-256 Ledger Post' },
+  { step: '07', title: 'FINAL OUTCOME', desc: 'Append-only ledger post' },
 ];
 
 export default function DecisionEngineSection() {
@@ -271,7 +271,7 @@ export default function DecisionEngineSection() {
               </h3>
             </div>
             <span className="text-xs font-mono text-gray-500">
-              Cryptographically Linked Ledger Operations
+              Linked Ledger Operations
             </span>
           </div>
 
@@ -294,12 +294,12 @@ export default function DecisionEngineSection() {
             </div>
           </div>
 
-          {/* SHA-256 Audit Trail Explainer */}
+          {/* Append-only audit trail explainer */}
           <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 flex items-start space-x-3 text-xs">
             <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-bold text-gray-900 font-mono block">
-                SHA-256 CHAINED AUDIT TRAIL
+                APPEND-ONLY AUDIT TRAIL
               </span>
               <p className="text-gray-600 mt-0.5 leading-relaxed">
                 Every material reconciliation event is recorded as an append-only audit event, allowing the final outcome to be traced through the reconciliation process. Database pre-save hooks strictly prevent update and delete mutations on audit records.

@@ -16,12 +16,14 @@ const API_BASE = import.meta.env.VITE_SERVER_URL
 export default function BusinessImpactPanel({ run, onExportCsv, onDownloadCertificate }) {
   if (!run) return null;
 
-  const totalRecords = run.total_records || 500;
-  const unresolved = run.unresolved || 0;
-  const autoMatched = (totalRecords - unresolved > 0) ? (totalRecords - unresolved) : (run.pass1_matched || 442);
-  const gstItc = run.total_gst_itc || 12340.50;
-  const totalSettlementVal = run.total_settlement_value || 8420500.00;
-  const estimatedManualHours = run.estimated_manual_hours || (Math.round(((totalRecords * 2) / 60) * 10) / 10);
+  const totalRecords = Number.isFinite(Number(run.total_records)) ? Number(run.total_records) : 0;
+  const unresolved = Number.isFinite(Number(run.unresolved)) ? Number(run.unresolved) : 0;
+  const autoMatched = Math.max(0, totalRecords - unresolved);
+  const gstItc = Number.isFinite(Number(run.total_gst_itc)) ? Number(run.total_gst_itc) : 0;
+  const totalSettlementVal = Number.isFinite(Number(run.total_settlement_value)) ? Number(run.total_settlement_value) : 0;
+  const estimatedManualHours = Number.isFinite(Number(run.estimated_manual_hours))
+    ? Number(run.estimated_manual_hours)
+    : Math.round(((totalRecords * 2) / 60) * 10) / 10;
   const isComplete = run.status === 'complete';
 
   const handleCsvDownload = () => {
@@ -93,7 +95,7 @@ export default function BusinessImpactPanel({ run, onExportCsv, onDownloadCertif
         <div className="p-3.5 rounded-lg bg-emerald-50/60 border border-emerald-200/80 space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 font-mono">
-              CLAIMABLE GST ITC (18%)
+              GST ON MDR (18%)
             </span>
             <div className="p-1 rounded bg-emerald-100 text-emerald-700">
               <TrendingUp className="h-3.5 w-3.5" />
@@ -103,7 +105,7 @@ export default function BusinessImpactPanel({ run, onExportCsv, onDownloadCertif
             ₹{gstItc.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
           <p className="text-[11px] text-emerald-700 font-sans leading-tight">
-            Input Tax Credit identified & ready to claim on 2% MDR gateway fees.
+            Tax component identified on 2% MDR gateway fees; claimability depends on tax reconciliation.
           </p>
         </div>
 

@@ -326,6 +326,10 @@ export function reconcileLevel2(settlementLineItems = [], ledgerRecords = [], ba
 
     // 1. Check exact order_id match
     let matchedLedger = orderId ? ledgerByOrder.get(orderId) : null;
+    if (matchedLedger) {
+      const exactLedgerId = matchedLedger.id || matchedLedger._id?.toString();
+      if (matchedLedgerIds.has(exactLedgerId)) matchedLedger = null;
+    }
 
     // 2. Fuzzy fallback if not found by exact key
     if (!matchedLedger) {

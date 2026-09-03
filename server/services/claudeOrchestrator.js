@@ -740,26 +740,45 @@ export async function executePass3(runId, options = {}) {
     }
 
     if (newExceptions.length > 0) {
-      for (const exp of newExceptions) {
-        await Exception.findOneAndUpdate(
-          { run_id: runId, payment_id: exp.payment_id },
-          exp,
-          { upsert: true, new: true }
+      if (mongoose.connection.readyState === 1) {
+        for (const exp of newExceptions) {
+          await Exception.findOneAndUpdate(
+            { run_id: runId, payment_id: exp.payment_id },
+            exp,
+            { upsert: true, new: true }
+          );
+        }
+      } else {
+        const existing = MemoryStore.getExceptions(runId).filter(
+          (stored) => !newExceptions.some((exp) => stored.payment_id === exp.payment_id)
         );
+        MemoryStore.saveExceptions(runId, [...existing, ...newExceptions]);
       }
     }
 
     for (const draftItem of draftActionsToCreate) {
       try {
         const generated = await generateDraftActionContent(client, draftItem.exceptionDoc, draftItem.targetRecord);
-        await DraftAction.create({
+        const draft = {
+          id: `draft_${runId}_${draftItem.exceptionDoc.payment_id || Date.now()}`,
           run_id: runId,
           exception_id: draftItem.exceptionDoc.payment_id,
           action_type: generated.action_type,
           draft_content: generated.draft_content,
           confidence: generated.confidence,
           status: 'pending_approval',
-        });
+          created_at: new Date(),
+          executed_at: null,
+          was_edited: false,
+        };
+        if (mongoose.connection.readyState === 1) {
+          await DraftAction.create(draft);
+        } else {
+          const drafts = MemoryStore.getDraftActions(runId);
+          if (!drafts.some((d) => d.exception_id === draft.exception_id)) {
+            MemoryStore.saveDraftActions(runId, [...drafts, draft]);
+          }
+        }
       } catch (draftErr) {
         console.warn('[DraftAction Trigger] Error:', draftErr.message);
       }
@@ -803,7 +822,10 @@ export async function executePass3(runId, options = {}) {
     run.ai_mode = aiMode;
     run.status = 'complete';
     run.completed_at = new Date();
-    await run.save();
+    if (typeof run.save === 'function' && mongoose.connection.readyState === 1) {
+      await run.save();
+    }
+    MemoryStore.saveRun(run);
 
     return {
       run_id: runId,
@@ -820,15 +842,28 @@ export async function executePass3(runId, options = {}) {
   }
 
   // Fallback 2-way mode
-  const unmatchedBankRecords = await BankRecord.find({
-    run_id: runId,
-    status: { $in: ['pending', 'exception'] },
-  }).lean();
-
-  const fallbackLedgerRecords = await LedgerRecord.find({
-    run_id: runId,
-    status: { $in: ['pending'] },
-  }).lean();
+  let unmatchedBankRecords = [];
+  let fallbackLedgerRecords = [];
+  if (mongoose.connection.readyState === 1) {
+    unmatchedBankRecords = await BankRecord.find({
+      run_id: runId,
+      status: { $in: ['pending', 'exception'] },
+    }).lean();
+    fallbackLedgerRecords = await LedgerRecord.find({
+      run_id: runId,
+      status: { $in: ['pending'] },
+    }).lean();
+  }
+  if (unmatchedBankRecords.length === 0) {
+    unmatchedBankRecords = MemoryStore.getBankRecords(runId).filter((record) =>
+      ['pending', 'exception', 'unmatched'].includes(record.status || 'pending')
+    );
+  }
+  if (fallbackLedgerRecords.length === 0) {
+    fallbackLedgerRecords = MemoryStore.getLedgerRecords(runId).filter((record) =>
+      (record.status || 'pending') === 'pending'
+    );
+  }
 
   if (unmatchedBankRecords.length === 0) {
     run.ai_mode = aiMode;
@@ -836,7 +871,10 @@ export async function executePass3(runId, options = {}) {
       run.status = 'complete';
       run.completed_at = run.completed_at || new Date();
     }
-    await run.save();
+    if (typeof run.save === 'function' && mongoose.connection.readyState === 1) {
+      await run.save();
+    }
+    MemoryStore.saveRun(run);
     return {
       run_id: runId,
       status: run.status,
@@ -924,44 +962,76 @@ export async function executePass3(runId, options = {}) {
   }
 
   if (newMatches.length > 0) {
-    await Match.insertMany(newMatches, { ordered: false });
-    await BankRecord.updateMany(
-      { run_id: runId, id: { $in: matchedBankIds } },
-      { $set: { status: 'matched' } }
-    );
-    await LedgerRecord.updateMany(
-      { run_id: runId, id: { $in: matchedLedgerIds } },
-      { $set: { status: 'matched' } }
-    );
+    if (mongoose.connection.readyState === 1) {
+      await Match.insertMany(newMatches, { ordered: false });
+      await BankRecord.updateMany(
+        { run_id: runId, id: { $in: matchedBankIds } },
+        { $set: { status: 'matched' } }
+      );
+      await LedgerRecord.updateMany(
+        { run_id: runId, id: { $in: matchedLedgerIds } },
+        { $set: { status: 'matched' } }
+      );
+    }
+    MemoryStore.saveMatches(runId, [...MemoryStore.getMatches(runId), ...newMatches]);
+    MemoryStore.getBankRecords(runId).forEach((record) => {
+      if (matchedBankIds.includes(record.id || record._id?.toString())) record.status = 'matched';
+    });
+    MemoryStore.getLedgerRecords(runId).forEach((record) => {
+      if (matchedLedgerIds.includes(record.id || record._id?.toString())) record.status = 'matched';
+    });
   }
 
   if (newExceptions.length > 0) {
-    for (const exp of newExceptions) {
-      await Exception.findOneAndUpdate(
-        { run_id: runId, bank_record_id: exp.bank_record_id },
-        exp,
-        { upsert: true, new: true }
+    if (mongoose.connection.readyState === 1) {
+      for (const exp of newExceptions) {
+        await Exception.findOneAndUpdate(
+          { run_id: runId, bank_record_id: exp.bank_record_id },
+          exp,
+          { upsert: true, new: true }
+        );
+      }
+    } else {
+      const existing = MemoryStore.getExceptions(runId).filter(
+        (stored) => !newExceptions.some((exp) => stored.bank_record_id === exp.bank_record_id)
       );
+      MemoryStore.saveExceptions(runId, [...existing, ...newExceptions]);
     }
   }
 
   for (const draftItem of draftActionsToCreate) {
     try {
       const generated = await generateDraftActionContent(client, draftItem.exceptionDoc, draftItem.targetRecord);
-      await DraftAction.create({
+      const draft = {
+        id: `draft_${runId}_${draftItem.exceptionDoc.bank_record_id || Date.now()}`,
         run_id: runId,
         exception_id: draftItem.exceptionDoc.bank_record_id,
         action_type: generated.action_type,
         draft_content: generated.draft_content,
         confidence: generated.confidence,
         status: 'pending_approval',
-      });
+        created_at: new Date(),
+        executed_at: null,
+        was_edited: false,
+      };
+      if (mongoose.connection.readyState === 1) {
+        await DraftAction.create(draft);
+      } else {
+        const drafts = MemoryStore.getDraftActions(runId);
+        if (!drafts.some((d) => d.exception_id === draft.exception_id)) {
+          MemoryStore.saveDraftActions(runId, [...drafts, draft]);
+        }
+      }
     } catch (draftErr) {
       console.warn('[DraftAction Trigger] Error:', draftErr.message);
     }
   }
 
-  const totalRecords = run.total_records || (await BankRecord.countDocuments({ run_id: runId }));
+  const totalRecords = run.total_records || (
+    mongoose.connection.readyState === 1
+      ? await BankRecord.countDocuments({ run_id: runId })
+      : MemoryStore.getBankRecords(runId).length
+  );
   const totalMatched = (run.pass1_matched || 0) + (run.pass2_matched || 0) + pass3MatchesCount;
   const unresolved = Math.max(0, totalRecords - totalMatched);
   const matchRate = totalRecords > 0 ? Math.round((totalMatched / totalRecords) * 10000) / 100 : 0.0;
@@ -972,7 +1042,10 @@ export async function executePass3(runId, options = {}) {
   run.ai_mode = aiMode;
   run.status = 'complete';
   run.completed_at = new Date();
-  await run.save();
+  if (typeof run.save === 'function' && mongoose.connection.readyState === 1) {
+    await run.save();
+  }
+  MemoryStore.saveRun(run);
 
   return {
     run_id: runId,

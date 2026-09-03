@@ -12,6 +12,10 @@ import {
   Percent,
 } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_SERVER_URL
+  ? `${import.meta.env.VITE_SERVER_URL}/api`
+  : '/api';
+
 export default function SettlementDetailModal({
   isOpen,
   onClose,
@@ -29,7 +33,7 @@ export default function SettlementDetailModal({
     setLoading(true);
     setError(null);
 
-    fetch(`/api/runs/${runId}/settlements/${settlementId}`)
+    fetch(`${API_BASE}/runs/${runId}/settlements/${settlementId}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

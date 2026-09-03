@@ -36,7 +36,7 @@ const PIPELINE_LEVELS = [
     level: 'LEVEL 2',
     title: 'Order Unpacking & Tax Isolation',
     badge: 'Tax Credit Recovery',
-    desc: 'Unpacks individual customer orders against internal sales ledgers and automatically isolates claimable 18% GST Input Tax Credits on gateway fees.',
+    desc: 'Unpacks individual customer orders against internal sales ledgers and isolates the 18% GST component on gateway fees for review.',
     input: 'Gateway Order Line Items ⇄ Internal ERP Sales Invoices',
     output: 'Reconciled Journal Entry & Claimable GST Tax Credit',
     icon: Receipt,

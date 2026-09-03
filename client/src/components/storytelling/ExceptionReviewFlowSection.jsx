@@ -87,7 +87,7 @@ export default function ExceptionReviewFlowSection({ runId, onRefresh }) {
             <span className="h-5 w-5 rounded-full bg-emerald-200 text-emerald-800 flex items-center justify-center font-bold text-[10px] shrink-0">4</span>
             <div>
               <span className="font-bold text-emerald-900 block">Human Approval Gate</span>
-              <span className="text-[10px] text-emerald-700">Auditor approves & logs SHA-256</span>
+              <span className="text-[10px] text-emerald-700">Auditor approves & appends audit event</span>
             </div>
           </div>
         </div>

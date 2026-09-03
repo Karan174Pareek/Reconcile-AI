@@ -39,7 +39,9 @@ export default function MetricCards({ run }) {
   const pass2 = run?.pass2_matched || 0;
   const unresolved = run?.unresolved || 0;
   const matchRate = run?.match_rate || 0;
-  const level1Flagged = typeof run?.level1_flagged === 'number' ? run.level1_flagged : 0;
+  const level1Balanced = Number.isFinite(Number(run?.level1_balanced)) ? Number(run.level1_balanced) : 0;
+  const level1Flagged = Number.isFinite(Number(run?.level1_flagged)) ? Number(run.level1_flagged) : 0;
+  const level1Total = level1Balanced + level1Flagged;
   const autoMatched = (total - unresolved > 0) ? (total - unresolved) : (pass1 + pass2);
 
   const cards = [
@@ -134,14 +136,16 @@ export default function MetricCards({ run }) {
             </span>
             <span>
               {level1Flagged > 0
-                ? `${run?.level1_balanced || 15} Settlement Batches Verified (${level1Flagged} Imbalance Isolated to HITL Queue)`
-                : `All ${run?.level1_balanced || 16} Settlement Batches Verified Balanced (Σ Line Items == Bank Credit)`}
+                ? `${level1Balanced} of ${level1Total} settlement batches balanced (${level1Flagged} isolated to HITL queue)`
+                : level1Total > 0
+                ? `All ${level1Balanced} settlement batches verified balanced (Σ line items == bank credit)`
+                : 'No settlement batch integrity results yet'}
             </span>
           </div>
         </div>
 
         <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded border shrink-0 bg-emerald-100 text-emerald-800 border-emerald-300">
-          {level1Flagged > 0 ? `${run?.level1_balanced || 15}/16 BALANCED` : 'GATE PASSED'}
+          {level1Total > 0 ? `${level1Balanced}/${level1Total} BALANCED` : 'PENDING'}
         </span>
       </div>
     </div>

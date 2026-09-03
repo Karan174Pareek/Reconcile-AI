@@ -100,10 +100,10 @@ export default function UnderTheHoodSection() {
                 <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
                 <div>
                   <span className="font-bold text-emerald-950 font-mono block">
-                    31 / 31 TESTS PASSING — VERIFIED CLEAN
+                    AUTOMATED TESTS — VERIFIED CLEAN
                   </span>
                   <p className="text-emerald-800 text-[11px]">
-                    Automated verification covers Zod ingestion schemas, 3-tier mathematical integrity, exact/fuzzy matching, Levenshtein similarity, and SHA-256 hash chaining.
+                    Automated verification covers Zod ingestion schemas, 3-tier mathematical integrity, exact/fuzzy matching, Levenshtein similarity, and append-only audit controls.
                   </p>
                 </div>
               </div>

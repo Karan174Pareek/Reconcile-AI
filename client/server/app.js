@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import crypto from 'crypto';
 import { connectDB } from './config/db.js';
 
 dotenv.config();
@@ -13,20 +12,24 @@ function sanitizeOrigin(url) {
   return url.replace(/^['"\s]+|['"\s]+$/g, '').replace(/\/+$/, '');
 }
 
-const configuredClientUrl = sanitizeOrigin(process.env.CLIENT_URL);
+const configuredClientUrl = process.env.CLIENT_URL ? sanitizeOrigin(process.env.CLIENT_URL) : null;
+const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
 
 const corsOriginHandler = (origin, callback) => {
   if (!origin) return callback(null, true);
   const cleanOrigin = sanitizeOrigin(origin);
-  if (
-    cleanOrigin === configuredClientUrl ||
-    cleanOrigin.endsWith('.vercel.app') ||
-    cleanOrigin.includes('localhost') ||
-    cleanOrigin.includes('127.0.0.1')
-  ) {
-    return callback(null, cleanOrigin);
+  let parsed;
+  try {
+    parsed = new URL(cleanOrigin);
+  } catch {
+    return callback(null, false);
   }
-  return callback(null, false);
+  if (!['http:', 'https:'].includes(parsed.protocol)) return callback(null, false);
+
+  const isConfigured = Boolean(configuredClientUrl) && cleanOrigin === configuredClientUrl;
+  const isLocalDevelopment = !isProduction &&
+    (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1');
+  return callback(null, isConfigured || isLocalDevelopment ? cleanOrigin : false);
 };
 
 const corsOptions = {
@@ -124,7 +127,8 @@ app.use((req, res, next) => {
 // Global error handler complying with standard error shape
 app.use((err, req, res, next) => {
   console.error('[Global Error Handler]:', err);
-  const status = err.statusCode || err.status || 500;
+  const status = err.statusCode || err.status ||
+    (err.code === 'LIMIT_FILE_SIZE' ? 413 : err.message?.includes('Only CSV files') ? 400 : 500);
   res.status(status).json({
     error: {
       code: err.code || 'INTERNAL_SERVER_ERROR',

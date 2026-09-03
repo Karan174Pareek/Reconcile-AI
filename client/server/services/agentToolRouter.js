@@ -196,6 +196,7 @@ export const GEMINI_AGENT_TOOLS = CLAUDE_AGENT_TOOLS.map((t) => ({
  */
 export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 'claude') {
   await ensureDbReady();
+  await MemoryStore.ensureRunHydrated(runId);
 
   const limit = Math.min(Math.max(1, Number(inputArgs.limit) || 20), 50);
   let result = null;
@@ -476,6 +477,22 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 
         }
       }
 
+      if (!doc) {
+        await MemoryStore.ensureRunHydrated(runId);
+        const memoryRecords = {
+          bank_records: MemoryStore.getBankRecords(runId),
+          ledger_records: MemoryStore.getLedgerRecords(runId),
+          settlement_reports: MemoryStore.getSettlementReports(runId),
+          settlement_line_items: MemoryStore.getSettlementLineItems(runId),
+          matches: MemoryStore.getMatches(runId),
+          exceptions: MemoryStore.getExceptions(runId),
+          draft_actions: MemoryStore.getDraftActions(runId),
+        }[collection] || [];
+        doc = memoryRecords.find((record) => {
+          const ids = [record.id, record._id?.toString(), record.bank_record_id, record.settlement_id, record.payment_id, record.order_id, record.exception_id];
+          return ids.some((candidate) => candidate != null && String(candidate) === String(id));
+        }) || null;
+      }
       if (!doc) {
         result = { message: `No record found in "${collection}" matching ID "${id}"` };
       } else {

@@ -83,7 +83,7 @@ const STAGES = [
     icon: Receipt,
     desc: 'Matches order line items & isolates 18% GST Input Tax Credit.',
     status: 'ITC ELIGIBLE',
-    detail: 'Unpacks individual customer orders against the ERP sales ledger. Automatically separates claimable 18% GST Input Tax Credit (ITC).',
+    detail: 'Unpacks individual customer orders against the ERP sales ledger and separates the 18% GST component for review.',
     inputSchema: 'Gateway Line Items ⇄ ERP Orders',
     outputSchema: 'Reconciled Sales Journal & Claimable ITC Ledger',
   },
@@ -96,7 +96,7 @@ const STAGES = [
     desc: 'Claude 3.5 Sonnet diagnoses variances and drafts human actions.',
     status: '10-ITEM BATCH',
     detail: 'When deterministic matching fails, Claude classifies the variance (timing difference, gateway fee, refund) and drafts journal entries.',
-    inputSchema: 'Unmatched Candidate Context (±10% amount, ±14 days)',
+    inputSchema: 'Unmatched Candidate Context (±15% amount, ±14 days)',
     outputSchema: 'Categorized Exception & HITL Draft Action Ticket',
   },
   {
@@ -105,11 +105,11 @@ const STAGES = [
     name: 'Audit Trail',
     category: 'Governance',
     icon: ShieldCheck,
-    desc: 'Immutable append-only SHA-256 chained audit log.',
+    desc: 'Immutable append-only audit log.',
     status: 'IMMUTABLE',
-    detail: 'Every pass execution, tool invocation, and human approval is chained to an SHA-256 hash ledger with update/delete pre-hooks.',
+    detail: 'Every pass execution, tool invocation, and human approval is recorded in the append-only audit log with update/delete pre-hooks.',
     inputSchema: 'Executed System/User Action',
-    outputSchema: 'SHA-256 Chained Audit Event',
+    outputSchema: 'Append-only Audit Event',
   },
 ];
 

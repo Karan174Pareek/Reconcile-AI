@@ -78,11 +78,21 @@ function parseAndValidateCsv(buffer, schema, recordType) {
  */
 export async function uploadCsvFiles(req, res, next) {
   try {
-    if (!req.files || (!req.files.bank_csv && !req.files.ledger_csv)) {
+    if (!req.files || !req.files.bank_csv || !req.files.ledger_csv) {
       return res.status(400).json({
         error: {
           code: 'MISSING_FILES',
           message: 'Both bank_csv and ledger_csv files are required.',
+          details: null,
+        },
+      });
+    }
+
+    if (req.files.settlement_csv) {
+      return res.status(400).json({
+        error: {
+          code: 'UNSUPPORTED_FILE',
+          message: 'settlement_csv is not supported by the upload flow. Use the benchmark generator for the full 3-level settlement dataset.',
           details: null,
         },
       });
@@ -100,6 +110,9 @@ export async function uploadCsvFiles(req, res, next) {
       );
       if (validationErrors.length > 0) allErrors.bank_errors = validationErrors;
       bankRecords = validRecords.map((r) => ({ ...r, run_id: runId, status: 'unmatched' }));
+      if (bankRecords.length === 0 && validationErrors.length === 0) {
+        allErrors.bank_errors = [{ row: 0, errors: ['Bank Statement CSV is empty.'] }];
+      }
     }
 
     let ledgerRecords = [];
@@ -111,6 +124,9 @@ export async function uploadCsvFiles(req, res, next) {
       );
       if (validationErrors.length > 0) allErrors.ledger_errors = validationErrors;
       ledgerRecords = validRecords.map((r) => ({ ...r, run_id: runId, status: 'unmatched' }));
+      if (ledgerRecords.length === 0 && validationErrors.length === 0) {
+        allErrors.ledger_errors = [{ row: 0, errors: ['Internal Ledger CSV is empty.'] }];
+      }
     }
 
     if (Object.keys(allErrors).length > 0) {
@@ -295,4 +311,3 @@ export async function coldResetRun(req, res, next) {
     next(error);
   }
 }
-

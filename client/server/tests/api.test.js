@@ -26,6 +26,13 @@ test('API Ingestion & Health Routes', async (t) => {
     assert.equal(data.status, 'healthy');
   });
 
+  await t.test('GET /api/runs rejects unknown run IDs instead of fabricating data', async () => {
+    const res = await fetch(`${baseUrl}/api/runs/does-not-exist`);
+    assert.equal(res.status, 404);
+    const data = await res.json();
+    assert.equal(data.error.code, 'RUN_NOT_FOUND');
+  });
+
   await t.test('POST /api/runs/upload rejects request missing files', async () => {
     const res = await fetch(`${baseUrl}/api/runs/upload`, {
       method: 'POST',

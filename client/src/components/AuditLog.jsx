@@ -95,7 +95,7 @@ export default function AuditLog({ runId }) {
           </span>
           <span className="badge-emerald text-[10px] font-mono font-semibold">
             <Lock className="h-2.5 w-2.5" />
-            <span>SHA-256 GATE SEALED</span>
+            <span>APPEND-ONLY GATE SEALED</span>
           </span>
         </div>
       </div>
@@ -164,8 +164,6 @@ export default function AuditLog({ runId }) {
                   : 'default';
                 const actorMeta = ACTOR_BADGES[actorKey];
                 const ActorIcon = actorMeta.icon;
-                const shaHash = (log.id || logId).replace(/[^a-f0-9]/gi, '').padEnd(64, 'a').slice(0, 16);
-
                 return (
                   <div key={logId} className="relative pl-10">
                     {/* Node Dot on Timeline */}
@@ -211,9 +209,9 @@ export default function AuditLog({ runId }) {
                         </div>
 
                         <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-500 self-start sm:self-auto shrink-0">
-                          {/* SHA-256 Hash Display */}
+                          {/* Stable event identifier */}
                           <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 select-all font-mono">
-                            SHA: {shaHash}...
+                            EVENT: {String(log.id || logId).slice(0, 18)}
                           </span>
                           <span className="flex items-center space-x-1">
                             <Clock className="h-3 w-3 text-slate-400" />

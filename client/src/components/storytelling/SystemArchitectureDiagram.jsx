@@ -59,11 +59,11 @@ const ARCHITECTURE_NODES = [
   {
     id: 'db',
     title: 'MongoDB Atlas & Audit Ledger',
-    subtitle: 'Mongoose ODM • Cryptographic SHA-256',
+    subtitle: 'Mongoose ODM • Append-only controls',
     icon: Database,
     color: 'purple',
-    tags: ['Immutable Log', 'Hash Chaining', 'Pre-Hooks'],
-    details: 'Houses runs, batches, line items, matches, and exceptions with an immutable SHA-256 chained event log.',
+    tags: ['Append-only Log', 'Mutation Guards', 'Pre-Hooks'],
+    details: 'Houses runs, batches, line items, matches, and exceptions with an append-only audit log.',
     telemetry: 'Security: Tamper-evident ledger',
   },
 ];

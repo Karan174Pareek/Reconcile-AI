@@ -148,6 +148,24 @@ test('Level 2: Line-Item -> Internal Order Unpacking with 2% MDR and 18% GST var
   assert.equal(refundMatch.variance_category, 'refund_deduction');
 });
 
+test('Level 2: does not match duplicate line items to the same ledger record', () => {
+  const lineItems = [
+    { settlement_id: 'setl_DUP', payment_id: 'pay_DUP_1', order_id: 'order_DUP', amount: 1000, net_amount: 976.4 },
+    { settlement_id: 'setl_DUP', payment_id: 'pay_DUP_2', order_id: 'order_DUP', amount: 1000, net_amount: 976.4 },
+  ];
+  const ledgerRecords = [{ id: 'LED-DUP', order_id: 'order_DUP', amount: 1000 }];
+
+  const result = reconcileLevel2(lineItems, ledgerRecords, new Set(['setl_DUP']), {
+    runId: 'RUN-TEST-L2-DUP',
+    enforceIntegrityGate: true,
+  });
+
+  assert.equal(result.matches.length, 1);
+  assert.equal(result.matches[0].ledger_record_id, 'LED-DUP');
+  assert.equal(result.exceptions.length, 1);
+  assert.equal(result.exceptions[0].category, 'unrecorded');
+});
+
 test('Pass 1 (Exact): matches records with identical amount and reference match', () => {
   const bankRecords = [
     {

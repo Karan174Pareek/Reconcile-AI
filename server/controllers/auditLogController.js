@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import AuditLog from '../models/AuditLog.js';
+import Run from '../models/Run.js';
 import { MemoryStore } from '../services/memoryStore.js';
 import { ensureDbReady } from '../config/db.js';
 
@@ -34,7 +35,27 @@ export async function getRunAuditLogs(req, res, next) {
 
     // If still empty, provide immutable pipeline lifecycle audit logs
     if (logs.length === 0) {
-      const run = MemoryStore.getRun(run_id);
+      let run = MemoryStore.getRun(run_id);
+      if (!run && mongoose.connection.readyState === 1) {
+        try {
+          run = await Run.findOne({ run_id }).lean();
+        } catch (e) {
+          console.warn('[Mongo AuditLog Run Lookup Warning]:', e.message);
+        }
+      }
+      if (!run) {
+        const hydrated = await MemoryStore.ensureRunHydrated(run_id);
+        run = hydrated?.run || null;
+      }
+      if (!run) {
+        return res.status(404).json({
+          error: {
+            code: 'RUN_NOT_FOUND',
+            message: `Run with ID "${run_id}" not found.`,
+            details: null,
+          },
+        });
+      }
       const initialLogs = [
         {
           id: `audit_init_${run_id}_1`,
@@ -45,10 +66,10 @@ export async function getRunAuditLogs(req, res, next) {
           target_id: run_id,
           timestamp: run?.completed_at ? new Date(run.completed_at).toISOString() : new Date().toISOString(),
           details: {
-            total_records: run?.total_records || 500,
-            match_rate: run?.match_rate || 87.5,
-            level0_matched: run?.level0_matched || 16,
-            level1_balanced: run?.level1_balanced || 15,
+            total_records: Number(run.total_records) || 0,
+            match_rate: Number(run.match_rate) || 0,
+            level0_matched: Number(run.level0_matched) || 0,
+            level1_balanced: Number(run.level1_balanced) || 0,
           },
         },
         {
@@ -61,8 +82,8 @@ export async function getRunAuditLogs(req, res, next) {
           timestamp: run?.created_at ? new Date(run.created_at).toISOString() : new Date(Date.now() - 60000).toISOString(),
           details: {
             source: 'Razorpay Benchmark Generator',
-            bank_records: 17,
-            batches: 16,
+            bank_records: Number(run.level0_total) || 0,
+            batches: (Number(run.level1_balanced) || 0) + (Number(run.level1_flagged) || 0),
           },
         },
       ];
@@ -96,7 +117,7 @@ export async function postAuditLog(req, res, next) {
     const { run_id } = req.params;
     const { actor, action, target_type, target_id, details } = req.body;
 
-    const allowedTargetTypes = new Set(['match', 'exception', 'draft_action', 'agent_query', 'settlement']);
+    const allowedTargetTypes = new Set(['run', 'match', 'exception', 'draft_action', 'agent_query', 'settlement']);
     if (!actor || !action || !target_type || !target_id || !allowedTargetTypes.has(target_type)) {
       return res.status(400).json({
         error: {
