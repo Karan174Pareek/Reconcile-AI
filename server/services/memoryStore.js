@@ -102,6 +102,23 @@ export const MemoryStore = {
     let settlementLineItems = memoryDb.settlementLineItems.get(runId);
     let ledgerRecords = memoryDb.ledgerRecords.get(runId);
 
+    const isRecreatableSynthetic =
+      runId === 'RUN-SEED-RAZORPAY-2026' ||
+      runId === 'RUN-DEFAULT' ||
+      runId.startsWith('RUN-SEED') ||
+      runId.startsWith('RUN-BENCHMARK') ||
+      runId.startsWith('RUN-COLD');
+
+    const hasExistingRecords =
+      (bankRecords?.length || 0) > 0 ||
+      (settlementReports?.length || 0) > 0 ||
+      (settlementLineItems?.length || 0) > 0 ||
+      (ledgerRecords?.length || 0) > 0;
+
+    if (!run && !hasExistingRecords && !isRecreatableSynthetic) {
+      return null;
+    }
+
     if (!bankRecords || !settlementReports || !settlementLineItems || !ledgerRecords) {
       const data = await generateRazorpaySeedData(runId);
       bankRecords = data.bankRecords;
@@ -117,7 +134,10 @@ export const MemoryStore = {
     if (matches.length === 0 && exceptions.length === 0) {
       const l0 = reconcileLevel0(bankRecords, settlementReports, { runId });
       const l1 = reconcileLevel1(settlementReports, settlementLineItems, { runId });
-      const l2 = reconcileLevel2(settlementLineItems, ledgerRecords, l1.balancedSettlementIds, { runId });
+      const l2 = reconcileLevel2(settlementLineItems, ledgerRecords, l1.balancedSettlementIds, {
+        runId,
+        enforceIntegrityGate: true,
+      });
 
       matches = [...l0.matches, ...l1.matches, ...l2.matches];
       exceptions = [...l0.exceptions, ...l1.exceptions, ...l2.exceptions];

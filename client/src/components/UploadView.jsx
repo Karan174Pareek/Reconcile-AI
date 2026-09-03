@@ -71,7 +71,8 @@ export default function UploadView({ isOpen, onClose, onRunCreated }) {
 
     try {
       const res = await axios.post(`${API_BASE}/runs/generate-seed`, { count: 500 });
-      setSuccessMessage(`Synthetic seed generated for run ${res.data.run_id} (${res.data.stats.totalBankRecords} records)!`);
+      const recordCount = res.data.stats?.total_order_line_items ?? res.data.stats?.total_records ?? res.data.stats?.bank_credits ?? 0;
+      setSuccessMessage(`Synthetic seed generated for run ${res.data.run_id} (${recordCount} records)!`);
       if (onRunCreated) {
         onRunCreated(res.data.run_id);
       }

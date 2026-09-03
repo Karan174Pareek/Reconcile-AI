@@ -28,7 +28,7 @@ const TRANSFORMATION_STEPS = [
   {
     step: '04',
     title: 'RECONCILED OUTPUT',
-    subtitle: 'Tax Isolation & Cryptographic Audit',
+    subtitle: 'Tax Isolation & Append-Only Audit',
     icon: ShieldCheck,
   },
 ];

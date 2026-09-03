@@ -125,3 +125,50 @@ test('Edge Case 4: Duplicate / replayed webhook-style record deduplication', () 
   assert.equal(result.matches.length, 1);
   assert.equal(result.matches[0].ledger_record_id, 'LED-DUP-01');
 });
+
+test('Edge Case 5: All batches imbalanced — Level 1 quarantines and Level 2 gate prevents unpacking', () => {
+  const settlementReports = [
+    {
+      settlement_id: 'setl_IMBAL_01',
+      amount: 1000.00,
+      utr: 'UTR-IMBAL-01',
+      settled_at: '2026-08-05',
+    },
+  ];
+
+  // Sum of line items = 500, but batch claims 1000 => imbalance
+  const lineItems = [
+    {
+      id: 'item_imbal_1',
+      settlement_id: 'setl_IMBAL_01',
+      payment_id: 'pay_imbal_1',
+      order_id: 'order_imbal_1',
+      amount: 500,
+      fee: 10,
+      tax: 1.8,
+      net_amount: 488.2,
+      type: 'payment',
+    },
+  ];
+
+  const ledgerRecords = [
+    {
+      id: 'led_imbal_1',
+      order_id: 'order_imbal_1',
+      amount: 500,
+      date: '2026-08-05',
+    },
+  ];
+
+  const l1 = reconcileLevel1(settlementReports, lineItems, { runId: 'RUN-EDGE-IMBAL' });
+  assert.equal(l1.balancedSettlementIds.size, 0);
+  assert.equal(l1.exceptions.length, 1);
+  assert.equal(l1.exceptions[0].category, 'batch_imbalance');
+
+  const l2 = reconcileLevel2(lineItems, ledgerRecords, l1.balancedSettlementIds, {
+    runId: 'RUN-EDGE-IMBAL',
+    enforceIntegrityGate: true,
+  });
+
+  assert.equal(l2.matches.length, 0);
+});

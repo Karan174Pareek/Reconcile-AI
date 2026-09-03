@@ -250,3 +250,50 @@ test('Record Integrity: unparseable/invalid numbers or dates are pushed to Excep
   assert.equal(result.matches.length, 1);
   assert.equal(result.matches[0].bank_record_id, 'BNK-VALID');
 });
+
+test('Level 2: does not match duplicate line items to the same ledger record', () => {
+  const settlementLineItems = [
+    {
+      id: 'item_dup_1',
+      settlement_id: 'setl_test_1',
+      payment_id: 'pay_dup_1',
+      order_id: 'order_duplicate_101',
+      amount: 1000,
+      fee: 20,
+      tax: 3.6,
+      net_amount: 976.4,
+      type: 'payment',
+    },
+    {
+      id: 'item_dup_2',
+      settlement_id: 'setl_test_1',
+      payment_id: 'pay_dup_2',
+      order_id: 'order_duplicate_101',
+      amount: 1000,
+      fee: 20,
+      tax: 3.6,
+      net_amount: 976.4,
+      type: 'payment',
+    },
+  ];
+
+  const ledgerRecords = [
+    {
+      id: 'led_101',
+      order_id: 'order_duplicate_101',
+      amount: 1000,
+      date: '2026-08-05',
+    },
+  ];
+
+  const balancedSettlementIds = new Set(['setl_test_1']);
+  const result = reconcileLevel2(settlementLineItems, ledgerRecords, balancedSettlementIds, {
+    runId: 'RUN-DUP-TEST',
+    enforceIntegrityGate: true,
+  });
+
+  assert.equal(result.matches.length, 1);
+  assert.equal(result.matches[0].payment_id, 'pay_dup_1');
+  assert.equal(result.exceptions.length, 1);
+  assert.equal(result.exceptions[0].payment_id, 'pay_dup_2');
+});

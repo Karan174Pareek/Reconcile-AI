@@ -105,11 +105,11 @@ const STAGES = [
     name: 'Audit Trail',
     category: 'Governance',
     icon: ShieldCheck,
-    desc: 'Immutable append-only SHA-256 chained audit log.',
+    desc: 'Immutable append-only audit log.',
     status: 'IMMUTABLE',
-    detail: 'Every pass execution, tool invocation, and human approval is chained to an SHA-256 hash ledger with update/delete pre-hooks.',
+    detail: 'Every pass execution, tool invocation, and human approval is recorded to an append-only audit ledger with update/delete pre-hooks.',
     inputSchema: 'Executed System/User Action',
-    outputSchema: 'SHA-256 Chained Audit Event',
+    outputSchema: 'Append-Only Sealed Audit Event',
   },
 ];
 

@@ -16,12 +16,12 @@ const API_BASE = import.meta.env.VITE_SERVER_URL
 export default function BusinessImpactPanel({ run, onExportCsv, onDownloadCertificate }) {
   if (!run) return null;
 
-  const totalRecords = run.total_records || 500;
-  const unresolved = run.unresolved || 0;
-  const autoMatched = (totalRecords - unresolved > 0) ? (totalRecords - unresolved) : (run.pass1_matched || 442);
-  const gstItc = run.total_gst_itc || 12340.50;
-  const totalSettlementVal = run.total_settlement_value || 8420500.00;
-  const estimatedManualHours = run.estimated_manual_hours || (Math.round(((totalRecords * 2) / 60) * 10) / 10);
+  const totalRecords = Number(run.total_records) || 0;
+  const unresolved = Number(run.unresolved) || 0;
+  const autoMatched = Math.max(0, totalRecords - unresolved);
+  const gstItc = Number(run.total_gst_itc) || 0;
+  const totalSettlementVal = Number(run.total_settlement_value) || 0;
+  const estimatedManualHours = Number(run.estimated_manual_hours) || (Math.round(((totalRecords * 2) / 60) * 10) / 10);
   const isComplete = run.status === 'complete';
 
   const handleCsvDownload = () => {
@@ -89,11 +89,11 @@ export default function BusinessImpactPanel({ run, onExportCsv, onDownloadCertif
       {/* 4 Stat Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         
-        {/* Card 1: GST Input Tax Credit */}
+        {/* Card 1: GST on MDR */}
         <div className="p-3.5 rounded-lg bg-emerald-50/60 border border-emerald-200/80 space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 font-mono">
-              CLAIMABLE GST ITC (18%)
+              GST ON MDR (18%)
             </span>
             <div className="p-1 rounded bg-emerald-100 text-emerald-700">
               <TrendingUp className="h-3.5 w-3.5" />
@@ -103,7 +103,7 @@ export default function BusinessImpactPanel({ run, onExportCsv, onDownloadCertif
             ₹{gstItc.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
           <p className="text-[11px] text-emerald-700 font-sans leading-tight">
-            Input Tax Credit identified & ready to claim on 2% MDR gateway fees.
+            GST on gateway MDR fees. Claimability as ITC depends on merchant tax registration and position.
           </p>
         </div>
 
@@ -121,7 +121,7 @@ export default function BusinessImpactPanel({ run, onExportCsv, onDownloadCertif
             ~{estimatedManualHours} Hours
           </div>
           <p className="text-[11px] text-blue-700 font-sans leading-tight">
-            Manual review estimate (assuming 2 min/txn) vs &lt; 2.8s automated execution.
+            Manual review estimate (assuming ~2 min/txn) vs automated execution.
           </p>
         </div>
 

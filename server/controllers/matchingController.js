@@ -126,7 +126,16 @@ export async function executePass3Handler(req, res, next) {
     }
 
     const { executePass3 } = await import('../services/claudeOrchestrator.js');
-    const result = await executePass3(run_id);
+    const pass3TimeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Pass 3 AI execution timed out (serverless limit safeguard)')), 7000)
+    );
+    let result = null;
+    try {
+      result = await Promise.race([executePass3(run_id), pass3TimeoutPromise]);
+    } catch (err) {
+      console.warn(`[Pass 3 Warning for run ${run_id}]:`, err.message);
+      result = { status: 'skipped_or_failed', error: err.message };
+    }
 
     return res.status(200).json({
       success: true,
@@ -286,14 +295,47 @@ export async function getRunSettlementDetail(req, res, next) {
     }
 
     if (!settlement) {
-      const allReports = MemoryStore.getSettlementReports(run_id);
-      settlement = allReports.find((s) => s.settlement_id === settlement_id) || null;
+      let reports = MemoryStore.getSettlementReports(run_id);
+      settlement = reports.find((s) => s.settlement_id === settlement_id) || null;
+      if (!settlement) {
+        const hydrated = await MemoryStore.ensureRunHydrated(run_id);
+        reports = hydrated?.settlementReports || MemoryStore.getSettlementReports(run_id);
+        settlement = reports.find((s) => s.settlement_id === settlement_id) || null;
+      }
+
       if (settlement) {
         const allLines = MemoryStore.getSettlementLineItems(run_id);
         lineItems = allLines.filter((l) => l.settlement_id === settlement_id);
         const allBanks = MemoryStore.getBankRecords(run_id);
         bankRecord = allBanks.find((b) => b.id === settlement.bank_record_id) || null;
       }
+    }
+
+    // Check if run itself exists
+    let run = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        run = await Run.findOne({ run_id }).lean();
+      } catch (e) {
+        console.warn('[Mongo Run Check Warning]:', e.message);
+      }
+    }
+    if (!run) {
+      run = MemoryStore.getRun(run_id);
+    }
+    if (!run) {
+      const hydrated = await MemoryStore.ensureRunHydrated(run_id);
+      run = hydrated?.run || MemoryStore.getRun(run_id);
+    }
+
+    if (!run) {
+      return res.status(404).json({
+        error: {
+          code: 'RUN_NOT_FOUND',
+          message: `Run "${run_id}" not found.`,
+          details: null,
+        },
+      });
     }
 
     if (!settlement) {
@@ -329,6 +371,32 @@ export async function exportRunJournalCsv(req, res, next) {
     let lineItems = [];
     let exceptions = [];
 
+    let run = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        run = await Run.findOne({ run_id }).lean();
+      } catch (e) {
+        console.warn('[Mongo Run Check Warning]:', e.message);
+      }
+    }
+    if (!run) {
+      run = MemoryStore.getRun(run_id);
+    }
+    if (!run) {
+      const hydrated = await MemoryStore.ensureRunHydrated(run_id);
+      run = hydrated?.run || MemoryStore.getRun(run_id);
+    }
+
+    if (!run) {
+      return res.status(404).json({
+        error: {
+          code: 'RUN_NOT_FOUND',
+          message: `Run "${run_id}" not found.`,
+          details: null,
+        },
+      });
+    }
+
     try {
       if (mongoose.connection.readyState === 1) {
         const SettlementLineItem = (await import('../models/SettlementLineItem.js')).default;
@@ -341,8 +409,9 @@ export async function exportRunJournalCsv(req, res, next) {
     }
 
     if (!lineItems.length) {
-      lineItems = MemoryStore.getSettlementLineItems(run_id);
-      exceptions = MemoryStore.getExceptions(run_id);
+      const hydrated = await MemoryStore.ensureRunHydrated(run_id);
+      lineItems = hydrated?.settlementLineItems || MemoryStore.getSettlementLineItems(run_id);
+      exceptions = hydrated?.exceptions || MemoryStore.getExceptions(run_id);
     }
 
     const exceptionMap = new Map();
@@ -371,11 +440,13 @@ export async function exportRunJournalCsv(req, res, next) {
       const gross = Number(item.amount || 0).toFixed(2);
       const fee = Number(item.fee || 0).toFixed(2);
       const tax = Number(item.tax || 0).toFixed(2);
-      const net = Number(item.net_amount || (gross - fee - tax)).toFixed(2);
+      const net = (item.net_amount !== undefined && item.net_amount !== null)
+        ? Number(item.net_amount).toFixed(2)
+        : (Number(gross) - Number(fee) - Number(tax)).toFixed(2);
       
       let accountCat = 'Sales Revenue / Razorpay Settlement';
       if (item.type === 'refund') accountCat = 'Customer Refunds / Reversals';
-      else if (fee > 0) accountCat = 'Gateway Charges & Tax Credit';
+      else if (Number(fee) > 0) accountCat = 'Gateway Charges & Tax Credit';
 
       const varCat = exc ? exc.category : (item.variance_category || 'none');
       const resStatus = exc ? (exc.human_decision || 'pending') : (item.unpacked_status || 'matched');
@@ -429,16 +500,22 @@ export async function exportRunAuditCertificate(req, res, next) {
     }
 
     if (!run) {
-      return res.status(404).json({ error: `Run "${run_id}" not found` });
+      return res.status(404).json({
+        error: {
+          code: 'RUN_NOT_FOUND',
+          message: `Run "${run_id}" not found.`,
+          details: null,
+        },
+      });
     }
 
-    const totalRecords = run.total_records || 500;
-    const matchRate = run.match_rate || 87.5;
-    const autoMatched = Math.max(0, totalRecords - (run.unresolved || 0));
+    const totalRecords = Number(run.total_records) || 0;
+    const matchRate = Number(run.match_rate) || 0;
+    const autoMatched = Math.max(0, totalRecords - (Number(run.unresolved) || 0));
     const unresolvedList = exceptions.filter((e) => e.human_decision === 'pending');
-    const gstItc = run.total_gst_itc || 12340.50;
-    const totalVal = run.total_settlement_value || 8420500.00;
-    const manualHours = run.estimated_manual_hours || 16.7;
+    const gstItc = Number(run.total_gst_itc) || 0;
+    const totalVal = Number(run.total_settlement_value) || 0;
+    const manualHours = Number(run.estimated_manual_hours) || Number(((totalRecords * 2) / 60).toFixed(1));
 
     const certMarkdown = `# RECONCILIATION CLOSE & AUDIT CERTIFICATE
 **Generated by ReconcileAI Engine**
@@ -456,9 +533,9 @@ export async function exportRunAuditCertificate(req, res, next) {
 ---
 
 ### Business & Tax Impact
-- **Claimable GST Input Tax Credit (18%)**: **₹${gstItc.toLocaleString('en-IN', { minimumFractionDigits: 2 })}**
-- **Manual Time Saved (Stated Assumption: ~2 min / txn)**: **~${manualHours} Hours** (vs < 2.8s automated execution)
-- **Level 1 Gateway Batch Integrity Gate**: **${run.level1_flagged || 0} Gateway Imbalance(s) Isolated**
+- **GST on MDR (18%) (claimability subject to merchant tax position)**: **₹${gstItc.toLocaleString('en-IN', { minimumFractionDigits: 2 })}**
+- **Manual Time Saved (Stated Assumption: ~2 min / txn)**: **~${manualHours} Hours** (vs automated execution)
+- **Level 1 Gateway Batch Integrity Gate**: **${Number(run.level1_flagged) || 0} Gateway Imbalance(s) Isolated**
 
 ---
 
@@ -467,10 +544,10 @@ ${unresolvedList.length === 0 ? '_Zero unresolved exceptions remaining — 100% 
 
 ---
 
-### Certification & Cryptographic Assurance
+### Certification & Audit Trail Assurance
 This report certifies that Level 0 (UTR Correlation), Level 1 (Batch Integrity Gate), and Level 2 (2% MDR + 18% GST Unpacking) rules have been executed against raw payment gateway and merchant ledger records.
 
-**Chain Status**: \`SHA-256 GATE SEALED\`
+**Audit Log**: \`APPEND-ONLY AUDIT LOG SEALED\`
 `;
 
     res.setHeader('Content-Type', 'text/markdown');

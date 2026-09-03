@@ -33,7 +33,7 @@ export default function SystemOverviewMapSection({ onOpenUpload, onNavigateTab }
           </div>
 
           <span className="text-xs font-mono text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 font-bold self-start sm:self-auto">
-            Zero Data Loss • Cryptographically Verified
+            Zero Data Loss • Deterministically Verified
           </span>
         </div>
 
@@ -61,7 +61,7 @@ export default function SystemOverviewMapSection({ onOpenUpload, onNavigateTab }
             <div className="space-y-2 text-[11px] text-gray-700 leading-relaxed">
               <p>• Explodes batches into individual constituent orders.</p>
               <p>• Validates mathematical balance: Gross - MDR - GST = Net.</p>
-              <p className="text-emerald-700 font-semibold">• Isolates 2% MDR fee & claims 18% GST Input Tax Credit.</p>
+              <p className="text-emerald-700 font-semibold">• Isolates 2% MDR fee & 18% GST on MDR (claimability subject to tax position).</p>
             </div>
           </div>
 
@@ -74,7 +74,7 @@ export default function SystemOverviewMapSection({ onOpenUpload, onNavigateTab }
             <div className="space-y-2 text-[11px] text-gray-700 leading-relaxed">
               <p>• Claude 3.5 Sonnet diagnoses complex exception variances.</p>
               <p>• Drafts vendor emails & adjusting entries for human approval.</p>
-              <p className="text-purple-700 font-semibold">• Immutable SHA-256 chained audit trail.</p>
+              <p className="text-purple-700 font-semibold">• Immutable append-only audit trail.</p>
             </div>
           </div>
         </div>

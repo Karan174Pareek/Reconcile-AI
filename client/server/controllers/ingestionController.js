@@ -78,7 +78,17 @@ function parseAndValidateCsv(buffer, schema, recordType) {
  */
 export async function uploadCsvFiles(req, res, next) {
   try {
-    if (!req.files || (!req.files.bank_csv && !req.files.ledger_csv)) {
+    if (req.files && req.files.settlement_csv) {
+      return res.status(400).json({
+        error: {
+          code: 'UNSUPPORTED_FILE',
+          message: '3-way settlement CSV upload is not supported in the upload flow. Use the benchmark generator for the 3-level settlement flow.',
+          details: null,
+        },
+      });
+    }
+
+    if (!req.files || !req.files.bank_csv || !req.files.ledger_csv) {
       return res.status(400).json({
         error: {
           code: 'MISSING_FILES',
@@ -98,7 +108,11 @@ export async function uploadCsvFiles(req, res, next) {
         BankRecordSchema,
         'Bank Statement'
       );
-      if (validationErrors.length > 0) allErrors.bank_errors = validationErrors;
+      if (validRecords.length === 0 && validationErrors.length === 0) {
+        allErrors.bank_errors = [{ row: 1, errors: ['CSV file contains zero valid data rows.'] }];
+      } else if (validationErrors.length > 0) {
+        allErrors.bank_errors = validationErrors;
+      }
       bankRecords = validRecords.map((r) => ({ ...r, run_id: runId, status: 'unmatched' }));
     }
 
@@ -109,7 +123,11 @@ export async function uploadCsvFiles(req, res, next) {
         LedgerRecordSchema,
         'Internal Ledger'
       );
-      if (validationErrors.length > 0) allErrors.ledger_errors = validationErrors;
+      if (validRecords.length === 0 && validationErrors.length === 0) {
+        allErrors.ledger_errors = [{ row: 1, errors: ['CSV file contains zero valid data rows.'] }];
+      } else if (validationErrors.length > 0) {
+        allErrors.ledger_errors = validationErrors;
+      }
       ledgerRecords = validRecords.map((r) => ({ ...r, run_id: runId, status: 'unmatched' }));
     }
 

@@ -196,6 +196,7 @@ export const GEMINI_AGENT_TOOLS = CLAUDE_AGENT_TOOLS.map((t) => ({
  */
 export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 'claude') {
   await ensureDbReady();
+  await MemoryStore.ensureRunHydrated(runId);
 
   const limit = Math.min(Math.max(1, Number(inputArgs.limit) || 20), 50);
   let result = null;
@@ -474,6 +475,54 @@ export async function executeAgentTool(runId, toolName, inputArgs = {}, actor = 
         } catch (e) {
           console.warn('[Mongo get_record_by_id Warning]:', e.message);
         }
+      }
+
+      if (!doc) {
+        let memRecords = [];
+        switch (collection) {
+          case 'bank_records':
+            memRecords = MemoryStore.getBankRecords(runId);
+            break;
+          case 'ledger_records':
+            memRecords = MemoryStore.getLedgerRecords(runId);
+            break;
+          case 'settlement_reports':
+            memRecords = MemoryStore.getSettlementReports(runId);
+            break;
+          case 'settlement_line_items':
+            memRecords = MemoryStore.getSettlementLineItems(runId);
+            break;
+          case 'matches':
+            memRecords = MemoryStore.getMatches(runId);
+            break;
+          case 'exceptions':
+            memRecords = MemoryStore.getExceptions(runId);
+            break;
+          case 'draft_actions':
+            memRecords = MemoryStore.getDraftActions(runId);
+            break;
+          default:
+            break;
+        }
+
+        const targetIdStr = String(id).trim().toUpperCase();
+        doc = memRecords.find((r) => {
+          const rId = String(r.id || r._id || '').trim().toUpperCase();
+          const rBank = String(r.bank_record_id || '').trim().toUpperCase();
+          const rSetl = String(r.settlement_id || '').trim().toUpperCase();
+          const rPay = String(r.payment_id || '').trim().toUpperCase();
+          const rOrd = String(r.order_id || r.invoice_ref || '').trim().toUpperCase();
+          const rExc = String(r.exception_id || '').trim().toUpperCase();
+
+          return (
+            rId === targetIdStr ||
+            rBank === targetIdStr ||
+            rSetl === targetIdStr ||
+            rPay === targetIdStr ||
+            rOrd === targetIdStr ||
+            rExc === targetIdStr
+          );
+        }) || null;
       }
 
       if (!doc) {

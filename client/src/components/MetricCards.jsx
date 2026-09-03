@@ -34,12 +34,15 @@ function AnimatedNumber({ value, isPercent = false, isCurrency = false, decimals
 }
 
 export default function MetricCards({ run }) {
-  const total = run?.total_records || 0;
-  const pass1 = run?.pass1_matched || 0;
-  const pass2 = run?.pass2_matched || 0;
-  const unresolved = run?.unresolved || 0;
-  const matchRate = run?.match_rate || 0;
+  const total = Number(run?.total_records) || 0;
+  const pass1 = Number(run?.pass1_matched) || 0;
+  const pass2 = Number(run?.pass2_matched) || 0;
+  const unresolved = Number(run?.unresolved) || 0;
+  const matchRate = Number(run?.match_rate) || 0;
+  const level1Balanced = typeof run?.level1_balanced === 'number' ? run.level1_balanced : null;
   const level1Flagged = typeof run?.level1_flagged === 'number' ? run.level1_flagged : 0;
+  const level1Total = level1Balanced !== null ? (level1Balanced + level1Flagged) : null;
+  const hasLevel1Data = level1Balanced !== null && level1Total !== null && level1Total > 0;
   const autoMatched = (total - unresolved > 0) ? (total - unresolved) : (pass1 + pass2);
 
   const cards = [
@@ -125,23 +128,45 @@ export default function MetricCards({ run }) {
       </div>
 
       {/* Dedicated Level 1 Batch Integrity Gate Status Card */}
-      <div className="p-3 rounded-lg border flex items-center justify-between text-xs font-mono transition-colors bg-emerald-50/60 border-emerald-200 text-emerald-900">
+      <div className={`p-3 rounded-lg border flex items-center justify-between text-xs font-mono transition-colors ${
+        !hasLevel1Data
+          ? 'bg-slate-50 border-slate-200 text-slate-700'
+          : level1Flagged > 0
+          ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+          : 'bg-emerald-50/60 border-emerald-200 text-emerald-900'
+      }`}>
         <div className="flex items-center space-x-2.5">
-          <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+          {level1Flagged > 0 ? (
+            <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
+          ) : (
+            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+          )}
           <div className="flex items-center space-x-2 flex-wrap">
             <span className="font-bold uppercase tracking-wider text-[10px]">
               LEVEL 1 BATCH INTEGRITY GATE:
             </span>
             <span>
-              {level1Flagged > 0
-                ? `${run?.level1_balanced || 15} Settlement Batches Verified (${level1Flagged} Imbalance Isolated to HITL Queue)`
-                : `All ${run?.level1_balanced || 16} Settlement Batches Verified Balanced (Σ Line Items == Bank Credit)`}
+              {!hasLevel1Data
+                ? 'Batch integrity checks will appear once settlement data is loaded'
+                : level1Flagged > 0
+                ? `${level1Balanced} of ${level1Total} Settlement Batches Verified (${level1Flagged} Imbalance Isolated to HITL Queue)`
+                : `All ${level1Balanced} Settlement Batches Verified Balanced (Σ Line Items == Bank Credit)`}
             </span>
           </div>
         </div>
 
-        <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded border shrink-0 bg-emerald-100 text-emerald-800 border-emerald-300">
-          {level1Flagged > 0 ? `${run?.level1_balanced || 15}/16 BALANCED` : 'GATE PASSED'}
+        <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded border shrink-0 ${
+          !hasLevel1Data
+            ? 'bg-slate-100 text-slate-600 border-slate-200'
+            : level1Flagged > 0
+            ? `${level1Balanced}/${level1Total} BALANCED`
+            : 'GATE PASSED'
+        }`}>
+          {!hasLevel1Data
+            ? 'PENDING'
+            : level1Flagged > 0
+            ? `${level1Balanced}/${level1Total} BALANCED`
+            : 'GATE PASSED'}
         </span>
       </div>
     </div>

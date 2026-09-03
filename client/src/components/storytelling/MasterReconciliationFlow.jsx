@@ -71,7 +71,7 @@ const MASTER_NODES = [
     icon: CheckCircle2,
     desc: 'Auto-clears 90% matches; flags 10% variances for HITL.',
     detail: 'Fully reconciled records are posted to the ledger; unresolved variances trigger Claude AI diagnosis and draft actions.',
-    sample: 'Matched Records: Posted with SHA-256 Hash\nExceptions: Sent to HITL Review Desk',
+    sample: 'Matched Records: Posted to Append-Only Audit Log\nExceptions: Sent to HITL Review Desk',
   },
 ];
 

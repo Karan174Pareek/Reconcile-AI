@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import crypto from 'crypto';
 import { connectDB } from './config/db.js';
 
 dotenv.config();
@@ -9,34 +8,47 @@ dotenv.config();
 const app = express();
 
 function sanitizeOrigin(url) {
-  if (!url || typeof url !== 'string') return 'http://localhost:5173';
+  if (!url || typeof url !== 'string') return '';
   return url.replace(/^['"\s]+|['"\s]+$/g, '').replace(/\/+$/, '');
 }
 
 const configuredClientUrl = sanitizeOrigin(process.env.CLIENT_URL);
 
+const isProduction =
+  process.env.NODE_ENV === 'production' ||
+  process.env.VERCEL_ENV === 'production';
+
 const corsOriginHandler = (origin, callback) => {
   if (!origin) return callback(null, true);
-  const cleanOrigin = sanitizeOrigin(origin);
-  if (
-    cleanOrigin === configuredClientUrl ||
-    cleanOrigin.endsWith('.vercel.app') ||
-    cleanOrigin.includes('localhost') ||
-    cleanOrigin.includes('127.0.0.1')
-  ) {
-    return callback(null, cleanOrigin);
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return callback(null, false);
+    }
+    const cleanOrigin = sanitizeOrigin(origin);
+    if (configuredClientUrl && cleanOrigin === configuredClientUrl) {
+      return callback(null, cleanOrigin);
+    }
+    if (!isProduction) {
+      const hostname = parsed.hostname;
+      if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]') {
+        return callback(null, cleanOrigin);
+      }
+    }
+    return callback(null, false);
+  } catch {
+    return callback(null, false);
   }
-  return callback(null, cleanOrigin);
+};
+
+const corsOptions = {
+  origin: corsOriginHandler,
+  credentials: true,
 };
 
 // Middleware
-app.use(
-  cors({
-    origin: corsOriginHandler,
-    credentials: true,
-  })
-);
-app.options('*', cors());
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -122,10 +134,20 @@ app.use((req, res, next) => {
 // Global error handler complying with standard error shape
 app.use((err, req, res, next) => {
   console.error('[Global Error Handler]:', err);
-  const status = err.statusCode || err.status || 500;
+  let status = err.statusCode || err.status || 500;
+  let code = err.code || 'INTERNAL_SERVER_ERROR';
+
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    status = 413;
+    code = 'LIMIT_FILE_SIZE';
+  } else if (err.message && err.message.includes('Only CSV files')) {
+    status = 400;
+    code = 'INVALID_FILE_TYPE';
+  }
+
   res.status(status).json({
     error: {
-      code: err.code || 'INTERNAL_SERVER_ERROR',
+      code,
       message: err.message || 'An unexpected server error occurred',
       details: process.env.NODE_ENV === 'development' ? err.stack : null,
     },

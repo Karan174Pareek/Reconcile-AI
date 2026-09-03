@@ -93,7 +93,7 @@ export default function HeroOverviewSection({
 
           {/* Value Proposition */}
           <p className="text-sm sm:text-base text-gray-700 leading-relaxed max-w-3xl">
-            Manual bank reconciliation is slow and error-prone. ReconcileAI automatically clears the standard <strong>90%</strong> of high-volume transactions and cryptographically isolates the complex <strong>10%</strong> (MDR fees, GST Input Tax Credits, timing differences, and refunds) for human verification.
+            Manual bank reconciliation is slow and error-prone. ReconcileAI automatically clears standard high-volume transactions and isolates complex exceptions (MDR fees, GST on gateway charges, timing differences, and refunds) for human verification.
           </p>
 
           {/* CTAs */}
@@ -159,11 +159,11 @@ export default function HeroOverviewSection({
           <div className="flex flex-wrap items-center gap-6 pt-4 border-t border-gray-200 text-xs font-mono text-gray-600">
             <div className="flex items-center space-x-2">
               <ShieldCheck className="h-4 w-4 text-emerald-600" />
-              <span>SHA-256 Chained Audit Trail</span>
+              <span>Append-Only Audit Trail</span>
             </div>
             <div className="flex items-center space-x-2">
               <Percent className="h-4 w-4 text-blue-600" />
-              <span>18% GST ITC Decomposition</span>
+              <span>18% GST MDR Decomposition</span>
             </div>
             <div className="flex items-center space-x-2">
               <Bot className="h-4 w-4 text-amber-600" />

@@ -103,7 +103,7 @@ export default function UnderTheHoodSection() {
                     31 / 31 TESTS PASSING — VERIFIED CLEAN
                   </span>
                   <p className="text-emerald-800 text-[11px]">
-                    Automated verification covers Zod ingestion schemas, 3-tier mathematical integrity, exact/fuzzy matching, Levenshtein similarity, and SHA-256 hash chaining.
+                    Automated verification covers Zod ingestion schemas, 3-tier mathematical integrity, exact/fuzzy matching, Levenshtein similarity, and append-only audit logging.
                   </p>
                 </div>
               </div>

@@ -40,6 +40,9 @@
     "concurrently": "^8.2.2",
     "playwright": "^1.62.1"
   },
+  "overrides": {
+    "qs": "^6.16.0"
+  },
   "engines": {
     "node": ">=18.0.0"
   },

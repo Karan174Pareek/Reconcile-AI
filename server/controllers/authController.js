@@ -11,13 +11,18 @@ const memoryUsers = new Map();
  */
 export async function register(req, res, next) {
   try {
-    const { email, password, role = 'analyst' } = req.body;
+    const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (
+      typeof email !== 'string' ||
+      typeof password !== 'string' ||
+      !email.trim() ||
+      !password.trim()
+    ) {
       return res.status(400).json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'Email and password are required.',
+          message: 'Email and password are required and must be valid non-empty strings.',
           details: null,
         },
       });
@@ -33,7 +38,7 @@ export async function register(req, res, next) {
       });
     }
 
-    const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
     let existingUser = null;
 
     if (mongoose.connection.readyState === 1) {
@@ -58,7 +63,9 @@ export async function register(req, res, next) {
       });
     }
 
-    const assignedRole = role === 'admin' ? 'admin' : 'analyst';
+    // Security policy: Public self-registration is strictly locked to 'analyst'.
+    // Elevated admin accounts must be provisioned through a trusted/internal path, not public signup.
+    const assignedRole = 'analyst';
     let user = null;
 
     if (mongoose.connection.readyState === 1) {
@@ -113,17 +120,22 @@ export async function login(req, res, next) {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (
+      typeof email !== 'string' ||
+      typeof password !== 'string' ||
+      !email.trim() ||
+      !password.trim()
+    ) {
       return res.status(400).json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'Email and password are required.',
+          message: 'Email and password are required and must be valid non-empty strings.',
           details: null,
         },
       });
     }
 
-    const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
     let user = null;
 
     if (mongoose.connection.readyState === 1) {

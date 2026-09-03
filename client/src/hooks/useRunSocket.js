@@ -41,12 +41,12 @@ export function useRunSocket(runId) {
 
     fetchRun(runId);
 
-    const isVercelProduction =
-      !SOCKET_URL ||
-      (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app'));
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isLocalDev = ['localhost', '127.0.0.1', '::1'].includes(hostname);
+    const isProduction = Boolean(import.meta.env.PROD || hostname.endsWith('.vercel.app') || !SOCKET_URL);
 
-    // In Vercel serverless production: Polling is the primary mechanism (Option A)
-    if (isVercelProduction) {
+    // In Vercel serverless production or when not local dev: Polling is the primary mechanism
+    if (isProduction || !isLocalDev) {
       setIsConnected(true);
       pollingTimerRef.current = setInterval(() => {
         fetchRun(runId);

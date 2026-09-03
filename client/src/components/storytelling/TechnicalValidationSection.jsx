@@ -36,10 +36,10 @@ const TEST_CATEGORIES = [
     badge: 'AI SAFEGUARDS',
   },
   {
-    title: 'CRYPTOGRAPHIC AUDIT LOG',
+    title: 'APPEND-ONLY AUDIT LOG',
     tests: '5 Tests Passed',
-    desc: 'Tests SHA-256 hash chaining and ensures database pre-hooks strictly block updates/deletions.',
-    badge: 'TAMPER-PROOF',
+    desc: 'Validates immutable audit logging and ensures database pre-hooks strictly block updates/deletions.',
+    badge: 'TAMPER-RESISTANT',
   },
 ];
 
@@ -57,7 +57,7 @@ export default function TechnicalValidationSection() {
               <span className="text-xs font-mono text-gray-500">ENGINEERING VERIFICATION REPORT</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mt-1">
-              Automated Test Suite & Cryptographic Guarantees
+              Automated Test Suite & Engineering Guarantees
             </h2>
           </div>
 
@@ -93,15 +93,15 @@ export default function TechnicalValidationSection() {
           ))}
         </div>
 
-        {/* Cryptographic Defense Callout */}
+        {/* Audit Defense Callout */}
         <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200 flex items-start space-x-3 text-xs">
           <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
           <div className="space-y-0.5 text-gray-700">
             <span className="font-bold text-gray-900 block font-mono">
-              Audit Defense & Cryptographic Immutability
+              Audit Defense & Append-Only Immutability
             </span>
             <p className="leading-relaxed">
-              Every reconciliation run generates an unbroken SHA-256 hash chain linking raw deposits, intermediate batch integrity checks, AI diagnoses, and human approval timestamps. Mongoose pre-save hooks strictly prevent update and delete mutations on the ledger.
+              Every reconciliation run generates an append-only audit trail linking raw deposits, intermediate batch integrity checks, AI diagnoses, and human approval timestamps. Mongoose pre-save hooks strictly prevent update and delete mutations on the ledger.
             </p>
           </div>
         </div>

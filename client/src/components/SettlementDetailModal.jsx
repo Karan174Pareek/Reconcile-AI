@@ -12,6 +12,10 @@ import {
   Percent,
 } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_SERVER_URL
+  ? `${import.meta.env.VITE_SERVER_URL}/api`
+  : '/api';
+
 export default function SettlementDetailModal({
   isOpen,
   onClose,
@@ -29,7 +33,7 @@ export default function SettlementDetailModal({
     setLoading(true);
     setError(null);
 
-    fetch(`/api/runs/${runId}/settlements/${settlementId}`)
+    fetch(`${API_BASE}/runs/${runId}/settlements/${settlementId}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -159,12 +163,12 @@ export default function SettlementDetailModal({
                   </div>
 
                   <div className="p-3.5 rounded-lg border border-gray-200 bg-white">
-                    <span className="text-[10px] text-gray-500 font-mono uppercase">18% GST (Claimable ITC)</span>
+                    <span className="text-[10px] text-gray-500 font-mono uppercase">18% GST on MDR</span>
                     <div className="text-lg font-bold text-emerald-700 font-mono mt-1">
                       ₹{Number(settlement.tax).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </div>
                     <div className="text-[11px] text-gray-500 mt-1 font-mono">
-                      Input Tax Credit eligible
+                      Tax on gateway fee
                     </div>
                   </div>
                 </div>

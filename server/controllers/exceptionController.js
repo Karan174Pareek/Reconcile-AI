@@ -155,10 +155,12 @@ export async function resolveException(req, res, next) {
     }
 
     if (!exception) {
-      return res.status(200).json({
-        success: true,
-        message: `Exception "${id}" updated to ${decision}.`,
-        data: { id, human_decision: decision },
+      return res.status(404).json({
+        error: {
+          code: 'EXCEPTION_NOT_FOUND',
+          message: `Exception "${id}" not found.`,
+          details: null,
+        },
       });
     }
 
@@ -223,24 +225,37 @@ export async function resolveException(req, res, next) {
       console.warn(`[DB Write: MEMORY_STORE_ONLY] Exception ${id} resolved to ${decision} in MemoryStore.`);
     }
 
-    // Update Run summary statistics
-    if (exception.run_id && mongoose.connection.readyState === 1) {
-      try {
-        const remainingUnresolved = await Exception.countDocuments({
-          run_id: exception.run_id,
-          human_decision: 'pending',
-        });
-        const run = await Run.findOne({ run_id: exception.run_id });
+    // Update Run summary statistics via Mongo if connected, else via MemoryStore
+    if (exception.run_id) {
+      if (mongoose.connection.readyState === 1) {
+        try {
+          const remainingUnresolved = await Exception.countDocuments({
+            run_id: exception.run_id,
+            human_decision: 'pending',
+          });
+          const run = await Run.findOne({ run_id: exception.run_id });
+          if (run) {
+            run.unresolved = remainingUnresolved;
+            const total = (Number(run.total_records) > 0) ? Number(run.total_records) : 1;
+            const matched = Math.max(0, total - remainingUnresolved);
+            run.match_rate = Math.min(100, Math.max(0, (matched / total) * 100));
+            await run.save();
+            MemoryStore.saveRun(run);
+          }
+        } catch (e) {
+          console.warn('[Mongo Run Summary Update Warning]:', e.message);
+        }
+      } else {
+        const memExceptions = MemoryStore.getExceptions(exception.run_id);
+        const remainingUnresolved = memExceptions.filter((e) => (e.human_decision || 'pending') === 'pending').length;
+        const run = MemoryStore.getRun(exception.run_id);
         if (run) {
           run.unresolved = remainingUnresolved;
-          const total = run.total_records || 1;
+          const total = (Number(run.total_records) > 0) ? Number(run.total_records) : 1;
           const matched = Math.max(0, total - remainingUnresolved);
           run.match_rate = Math.min(100, Math.max(0, (matched / total) * 100));
-          await run.save();
           MemoryStore.saveRun(run);
         }
-      } catch (e) {
-        console.warn('[Mongo Run Summary Update Warning]:', e.message);
       }
     }
 

@@ -12,31 +12,48 @@ const server = http.createServer(app);
 import { registerSocketServer } from './sockets/runSocket.js';
 
 function sanitizeOrigin(url) {
-  if (!url || typeof url !== 'string') return 'http://localhost:5173';
+  if (!url || typeof url !== 'string') return '';
   return url.replace(/^['"\s]+|['"\s]+$/g, '').replace(/\/+$/, '');
 }
 
 const configuredClientUrl = sanitizeOrigin(process.env.CLIENT_URL);
 
-// Socket.io initialization
-const io = new Server(server, {
-  cors: {
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      const cleanOrigin = sanitizeOrigin(origin);
-      if (
-        cleanOrigin === configuredClientUrl ||
-        cleanOrigin.endsWith('.vercel.app') ||
-        cleanOrigin.includes('localhost') ||
-        cleanOrigin.includes('127.0.0.1')
-      ) {
+const isProduction =
+  process.env.NODE_ENV === 'production' ||
+  process.env.VERCEL_ENV === 'production';
+
+const corsOriginHandler = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return callback(null, false);
+    }
+    const cleanOrigin = sanitizeOrigin(origin);
+    if (configuredClientUrl && cleanOrigin === configuredClientUrl) {
+      return callback(null, cleanOrigin);
+    }
+    if (!isProduction) {
+      const hostname = parsed.hostname;
+      if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]') {
         return callback(null, cleanOrigin);
       }
-      return callback(null, cleanOrigin);
-    },
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
+    }
+    return callback(null, false);
+  } catch {
+    return callback(null, false);
+  }
+};
+
+const corsOptions = {
+  origin: corsOriginHandler,
+  methods: ['GET', 'POST'],
+  credentials: true,
+};
+
+// Socket.io initialization
+const io = new Server(server, {
+  cors: corsOptions,
 });
 
 registerSocketServer(io);
@@ -67,17 +84,17 @@ export { io };
 async function start() {
   try {
     await connectDB();
-    server.listen(PORT, () => {
-      console.log(`\n==================================================`);
-      console.log(`  ReconcileAI Server running on port ${PORT}`);
-      console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`  WebSocket Server active`);
-      console.log(`==================================================\n`);
-    });
   } catch (error) {
-    console.error('[Server Startup Error]:', error);
-    process.exit(1);
+    console.warn('[Server Startup Warning]: MongoDB unavailable; using memory fallback:', error.message);
   }
+
+  server.listen(PORT, () => {
+    console.log(`\n==================================================`);
+    console.log(`  ReconcileAI Server running on port ${PORT}`);
+    console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`  WebSocket Server active`);
+    console.log(`==================================================\n`);
+  });
 }
 
 start();
